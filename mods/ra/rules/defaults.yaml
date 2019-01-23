@@ -959,6 +959,7 @@
 		Type: Heavy
 	HiddenUnderFog:
 		Type: CenterPosition
+		AlwaysVisibleStances: None
 	ScriptTriggers:
 	WithFacingSpriteBody:
 	HitShape:

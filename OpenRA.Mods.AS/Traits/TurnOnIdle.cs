@@ -44,16 +44,16 @@ namespace OpenRA.Mods.AS.Traits
 			if (--currDelay > 0)
 				return;
 
-			if (turnTicks == 0)
-			{
-				targetFacing = self.World.SharedRandom.Next(256);
-				turnTicks = System.Math.Abs(mobile.Facing - targetFacing) / mobile.TurnSpeed;
-			}
-
-			if (--turnTicks > 0)
+			if (--turnTicks >= 0)
 			{
 				mobile.Facing = Util.TickFacing(mobile.Facing, targetFacing, mobile.TurnSpeed);
 				return;
+			}
+
+			if (turnTicks == -1)
+			{
+				targetFacing = self.World.SharedRandom.Next(256);
+				turnTicks = 1 + System.Math.Abs(mobile.Facing - targetFacing) / mobile.TurnSpeed;
 			}
 
 			currDelay = self.World.SharedRandom.Next(Info.MinDelay, Info.MinDelay);

@@ -100,13 +100,15 @@ namespace OpenRA.Mods.AS.Projectiles
 			if (info.Distortion != 0)
 			{
 				leftVector = new WVec(direction.Y, -direction.X, 0);
-				leftVector = 1024 * leftVector / leftVector.Length;
+				if (leftVector.Length != 0)
+					leftVector = 1024 * leftVector / leftVector.Length;
 
 				upVector = new WVec(
 					-direction.X * direction.Z,
 					-direction.Z * direction.Y,
 					direction.X * direction.X + direction.Y * direction.Y);
-				upVector = 1024 * upVector / upVector.Length;
+				if (upVector.Length != 0)
+					upVector = 1024 * upVector / upVector.Length;
 
 				random = args.SourceActor.World.SharedRandom;
 			}
