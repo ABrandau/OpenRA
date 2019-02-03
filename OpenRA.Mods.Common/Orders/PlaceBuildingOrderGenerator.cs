@@ -64,7 +64,10 @@ namespace OpenRA.Mods.Common.Orders
 			faction = buildableInfo.ForceFaction
 				?? (mostLikelyProducer.Trait != null ? mostLikelyProducer.Trait.Faction : queue.Actor.Owner.Faction.InternalName);
 
-			buildOk = map.Rules.Sequences.GetSequence("overlay", "build-valid-{0}".F(tileset)).GetSprite(0);
+			if (map.Rules.Sequences.HasSequence("overlay", "build-valid-{0}".F(tileset)))
+				buildOk = map.Rules.Sequences.GetSequence("overlay", "build-valid-{0}".F(tileset)).GetSprite(0);
+			else
+				buildOk = map.Rules.Sequences.GetSequence("overlay", "build-valid").GetSprite(0);
 			buildBlocked = map.Rules.Sequences.GetSequence("overlay", "build-invalid").GetSprite(0);
 
 			buildingInfluence = world.WorldActor.Trait<BuildingInfluence>();
@@ -112,7 +115,7 @@ namespace OpenRA.Mods.Common.Orders
 					orderType = "PlacePlug";
 					if (!AcceptsPlug(topLeft, plugInfo))
 					{
-						Game.Sound.PlayNotification(world.Map.Rules, owner, "Speech", "BuildingCannotPlaceAudio", owner.Faction.InternalName);
+						Game.Sound.PlayNotification(world.Map.Rules, owner, "Speech", placeBuildingInfo.CannotPlaceNotification, owner.Faction.InternalName);
 						yield break;
 					}
 				}
@@ -124,7 +127,7 @@ namespace OpenRA.Mods.Common.Orders
 						foreach (var order in ClearBlockersOrders(world, topLeft))
 							yield return order;
 
-						Game.Sound.PlayNotification(world.Map.Rules, owner, "Speech", "BuildingCannotPlaceAudio", owner.Faction.InternalName);
+						Game.Sound.PlayNotification(world.Map.Rules, owner, "Speech", placeBuildingInfo.CannotPlaceNotification, owner.Faction.InternalName);
 						yield break;
 					}
 
@@ -146,7 +149,7 @@ namespace OpenRA.Mods.Common.Orders
 
 		public void Tick(World world)
 		{
-			if (queue.CurrentItem() == null || queue.CurrentItem().Item != actorInfo.Name)
+			if (queue.AllQueued().All(i => !i.Done || i.Item != actorInfo.Name))
 				world.CancelInputMode();
 
 			if (preview == null)

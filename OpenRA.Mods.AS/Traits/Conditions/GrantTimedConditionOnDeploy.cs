@@ -11,6 +11,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using OpenRA.Activities;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Orders;
@@ -45,6 +46,9 @@ namespace OpenRA.Mods.AS.Traits
 		[SequenceReference, Desc("Animation to play for deploying.")]
 		public readonly string DeployAnimation = null;
 
+		[Desc("Apply (un)deploy animations to sprite bodies with these names.")]
+		public readonly string[] BodyNames = { "body" };
+
 		[Desc("Facing that the actor must face before deploying. Set to -1 to deploy regardless of facing.")]
 		public readonly int Facing = -1;
 
@@ -72,10 +76,10 @@ namespace OpenRA.Mods.AS.Traits
 	{
 		readonly Actor self;
 		readonly bool canTurn;
-		readonly Lazy<WithSpriteBody> body;
 		int deployedToken = ConditionManager.InvalidConditionToken;
 		int deployingToken = ConditionManager.InvalidConditionToken;
 
+		WithSpriteBody[] wsbs;
 		ConditionManager manager;
 		[Sync] int ticks;
 		TimedDeployState deployState;
@@ -85,12 +89,12 @@ namespace OpenRA.Mods.AS.Traits
 		{
 			this.self = self;
 			canTurn = self.Info.HasTraitInfo<IFacingInfo>();
-			body = Exts.Lazy(self.TraitOrDefault<WithSpriteBody>);
 		}
 
 		void INotifyCreated.Created(Actor self)
 		{
 			manager = self.Trait<ConditionManager>();
+			wsbs = self.TraitsImplementing<WithSpriteBody>().Where(w => Info.BodyNames.Contains(w.Info.Name)).ToArray();
 
 			if (Info.StartsFullyCharged)
 			{
@@ -104,9 +108,9 @@ namespace OpenRA.Mods.AS.Traits
 			}
 		}
 
-		Order IIssueDeployOrder.IssueDeployOrder(Actor self)
+		Order IIssueDeployOrder.IssueDeployOrder(Actor self, bool queued)
 		{
-			return new Order("GrantTimedConditionOnDeploy", self, false);
+			return new Order("GrantTimedConditionOnDeploy", self, queued);
 		}
 
 		bool IIssueDeployOrder.CanIssueDeployOrder(Actor self) { return !IsTraitPaused && !IsTraitDisabled; }
@@ -127,6 +131,11 @@ namespace OpenRA.Mods.AS.Traits
 				return new Order(order.OrderID, self, queued);
 
 			return null;
+		}
+
+		public Order IssueDeployOrder(Actor self)
+		{
+			return new Order("GrantTimedConditionOnDeploy", self, false);
 		}
 
 		void IResolveOrder.ResolveOrder(Actor self, Order order)
@@ -165,15 +174,17 @@ namespace OpenRA.Mods.AS.Traits
 			if (!string.IsNullOrEmpty(Info.DeploySound))
 				Game.Sound.Play(SoundType.World, Info.DeploySound, self.CenterPosition);
 
+			var wsb = wsbs.FirstEnabledTraitOrDefault();
+
 			// If there is no animation to play just grant the upgrades that are used while deployed.
 			// Alternatively, play the deploy animation and then grant the upgrades.
-			if (string.IsNullOrEmpty(Info.DeployAnimation) || body.Value == null)
+			if (string.IsNullOrEmpty(Info.DeployAnimation) || wsb == null)
 				OnDeployCompleted();
 			else
 			{
 				if (manager != null && !string.IsNullOrEmpty(Info.DeployingCondition) && deployingToken == ConditionManager.InvalidConditionToken)
 					deployingToken = manager.GrantCondition(self, Info.DeployingCondition);
-				body.Value.PlayCustomAnimation(self, Info.DeployAnimation, OnDeployCompleted);
+				wsb.PlayCustomAnimation(self, Info.DeployAnimation, OnDeployCompleted);
 			}
 		}
 
@@ -195,13 +206,15 @@ namespace OpenRA.Mods.AS.Traits
 			if (!string.IsNullOrEmpty(Info.UndeploySound))
 				Game.Sound.Play(SoundType.World, Info.UndeploySound, self.CenterPosition);
 
-			if (string.IsNullOrEmpty(Info.DeployAnimation) || body.Value == null)
+			var wsb = wsbs.FirstEnabledTraitOrDefault();
+
+			if (string.IsNullOrEmpty(Info.DeployAnimation) || wsb == null)
 				OnUndeployCompleted();
 			else
 			{
 				if (manager != null && !string.IsNullOrEmpty(Info.DeployingCondition) && deployingToken == ConditionManager.InvalidConditionToken)
 					deployingToken = manager.GrantCondition(self, Info.DeployingCondition);
-				body.Value.PlayCustomAnimationBackwards(self, Info.DeployAnimation, OnUndeployCompleted);
+				wsb.PlayCustomAnimationBackwards(self, Info.DeployAnimation, OnUndeployCompleted);
 			}
 		}
 

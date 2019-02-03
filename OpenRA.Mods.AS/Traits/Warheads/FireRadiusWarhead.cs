@@ -50,7 +50,7 @@ namespace OpenRA.Mods.AS.Warheads
 					? world.SharedRandom.Next(Amount[0], Amount[1])
 					: Amount[0];
 
-			var offset = 1024 / amount;
+			var offset = 256 / amount;
 
 			for (var i = 0; i < amount; i++)
 			{

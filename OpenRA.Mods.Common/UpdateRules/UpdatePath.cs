@@ -34,11 +34,36 @@ namespace OpenRA.Mods.Common.UpdateRules
 			Justification = "Extracting update lists to temporary variables obfuscates the definitions.")]
 		static readonly UpdatePath[] Paths =
 		{
+			new UpdatePath("release-20171014", "release-20180218", new UpdateRule[]
+			{
+				new LegacyBetaWarning(),
+				new RemoveMobileOnRails(),
+				new AircraftCanHoverGeneralization(),
+				new AddNukeLaunchAnimation(),
+				new RenameWithTurreted(),
+				new RemovePlayerPaletteTileset(),
+				new CapturableChanges(),
+				new DecoupleSelfReloading(),
+				new RemoveOutOfAmmo(),
+				new ChangeCanPowerDown(),
+				new ReplaceRequiresPower(),
+				new DropPauseAnimationWhenDisabled(),
+				new ChangeBuildableArea(),
+				new MoveVisualBounds(),
+				new ScaleDefaultModHealth(),
+				new ReworkCheckboxes(),
+				new SplitGateFromBuilding(),
+				new RemoveIDisable(),
+				new ReplaceCanPowerDown(),
+				new ScaleSupportPowerSecondsToTicks(),
+				new WarnAboutInfiltrateForTypes(),
+				new RenameBurstDelay(),
+			}),
+
 			new UpdatePath("release-20180218", "release-20180307", new UpdateRule[0]),
 
-			new UpdatePath("release-20180307", new UpdateRule[]
+			new UpdatePath("release-20180307", "release-20180923", new UpdateRule[]
 			{
-				// Bleed only changes here
 				new RemoveTerrainTypeIsWaterFlag(),
 				new DefineSquadExcludeHarvester(),
 				new RemoveWeaponScanRadius(),
@@ -55,10 +80,43 @@ namespace OpenRA.Mods.Common.UpdateRules
 				new RenameEmitInfantryOnSell(),
 				new SplitRepairDecoration(),
 				new MoveHackyAISupportPowerDecisions(),
+				new DefineGroundCorpseDefault(),
+				new RemoveCanUndeployFromGrantConditionOnDeploy(),
+			}),
+
+			new UpdatePath("release-20180923", "release-20181215", new UpdateRule[0]),
+
+			new UpdatePath("release-20181215", new UpdateRule[]
+			{
+				// Bleed only changes here
+				new AddCarryableHarvester(),
+				new RenameEditorTilesetFilter(),
+				new DefineNotificationDefaults(),
+				new MergeRearmAndRepairAnimation(),
+				new MergeCaptureTraits(),
+				new RemovedNotifyBuildComplete(),
+				new LowPowerSlowdownToModifier(),
+				new ChangeTakeOffSoundAndLandingSound(),
+				new RemoveHealthPercentageRing(),
+				new RenameCrateActionNotification(),
+				new RemoveRepairBuildingsFromAircraft(),
+				new AddRearmable(),
+				new MergeAttackPlaneAndHeli(),
+				new RemovedDemolishLocking(),
+				new RequireProductionType(),
+				new CloakRequiresConditionToPause(),
+				new ExtractHackyAIModules(),
+				new RemoveNegativeDamageFullHealthCheck(),
+				new RemoveResourceExplodeModifier(),
+				new DefineLevelUpImageDefault(),
+				new RemovedAutoCarryallCircleTurnSpeed(),
+				new RemoveAttackIgnoresVisibility(),
+				new ReplacedWithChargeAnimation(),
+				new RefactorResourceLevelAnimating(),
 			})
 		};
 
-		public static IEnumerable<UpdateRule> FromSource(ObjectCreator objectCreator, string source)
+		public static IEnumerable<UpdateRule> FromSource(ObjectCreator objectCreator, string source, bool chain = true)
 		{
 			// Use reflection to identify types
 			var namedType = objectCreator.FindType(source);
@@ -66,7 +124,7 @@ namespace OpenRA.Mods.Common.UpdateRules
 				return new[] { (UpdateRule)objectCreator.CreateBasic(namedType) };
 
 			var namedPath = Paths.FirstOrDefault(p => p.source == source);
-			return namedPath != null ? namedPath.Rules : null;
+			return namedPath != null ? namedPath.Rules(chain) : null;
 		}
 
 		public static IEnumerable<string> KnownPaths { get { return Paths.Select(p => p.source); } }
@@ -88,18 +146,15 @@ namespace OpenRA.Mods.Common.UpdateRules
 			this.chainToSource = chainToSource;
 		}
 
-		IEnumerable<UpdateRule> Rules
+		IEnumerable<UpdateRule> Rules(bool chain = true)
 		{
-			get
+			if (chainToSource != null && chain)
 			{
-				if (chainToSource != null)
-				{
-					var chain = Paths.First(p => p.source == chainToSource);
-					return rules.Concat(chain.Rules);
-				}
-
-				return rules;
+				var child = Paths.First(p => p.source == chainToSource);
+				return rules.Concat(child.Rules(chain));
 			}
+
+			return rules;
 		}
 	}
 }

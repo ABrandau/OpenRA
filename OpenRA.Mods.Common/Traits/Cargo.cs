@@ -75,7 +75,8 @@ namespace OpenRA.Mods.Common.Traits
 	}
 
 	public class Cargo : IPips, IIssueOrder, IResolveOrder, IOrderVoice, INotifyCreated, INotifyKilled,
-		INotifyOwnerChanged, INotifyAddedToWorld, ITick, INotifySold, INotifyActorDisposing, IIssueDeployOrder
+		INotifyOwnerChanged, INotifyAddedToWorld, ITick, INotifySold, INotifyActorDisposing, IIssueDeployOrder,
+		ITransformActorInitModifier
 	{
 		public readonly CargoInfo Info;
 		readonly Actor self;
@@ -173,7 +174,12 @@ namespace OpenRA.Mods.Common.Traits
 			return null;
 		}
 
-		Order IIssueDeployOrder.IssueDeployOrder(Actor self)
+		Order IIssueDeployOrder.IssueDeployOrder(Actor self, bool queued)
+		{
+			return new Order("Unload", self, queued);
+		}
+
+		public Order IssueDeployOrder(Actor self)
 		{
 			return new Order("Unload", self, false);
 		}
@@ -383,8 +389,8 @@ namespace OpenRA.Mods.Common.Traits
 					if (!inAir && positionable.CanEnterCell(self.Location, self, false))
 					{
 						self.World.AddFrameEndTask(w => w.Add(passenger));
-						var nbm = passenger.TraitOrDefault<INotifyBlockingMove>();
-						if (nbm != null)
+						var nbms = passenger.TraitsImplementing<INotifyBlockingMove>();
+						foreach (var nbm in nbms)
 							nbm.OnNotifyBlockingMove(passenger, passenger);
 					}
 					else
@@ -468,6 +474,11 @@ namespace OpenRA.Mods.Common.Traits
 				currentCell = cell;
 				CurrentAdjacentCells = GetAdjacentCells();
 			}
+		}
+
+		void ITransformActorInitModifier.ModifyTransformActorInit(Actor self, TypeDictionary init)
+		{
+			init.Add(new RuntimeCargoInit(Passengers.ToArray()));
 		}
 	}
 

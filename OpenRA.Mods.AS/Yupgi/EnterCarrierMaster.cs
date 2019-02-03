@@ -88,7 +88,7 @@ namespace OpenRA.Mods.Yupgi_alert.Activities
 				}
 
 				// Insta re-arm. (Delayed launching is handled at spawner.)
-				var ammoPools = self.TraitsImplementing<AmmoPool>().Where(p => !p.AutoReloads).ToArray();
+				var ammoPools = self.TraitsImplementing<AmmoPool>().ToArray(); //TODO hacky fix for lack of AmmoPool.AutoReloads
 				if (ammoPools != null)
 					foreach (var pool in ammoPools)
 						while (pool.GiveAmmo(self, 1)); // fill 'er up.

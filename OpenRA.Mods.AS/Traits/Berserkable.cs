@@ -73,7 +73,7 @@ namespace OpenRA.Mods.AS.Traits
 			if (IsTraitDisabled)
 				return;
 
-			var atbs = self.TraitsImplementing<AttackBase>().Where(a => !a.IsTraitDisabled).ToArray();
+			var atbs = self.TraitsImplementing<AttackBase>().Where(a => !a.IsTraitDisabled && !a.IsTraitPaused).ToArray();
 			if (atbs.Length == 0)
 			{
 				self.QueueActivity(new Wait(15));

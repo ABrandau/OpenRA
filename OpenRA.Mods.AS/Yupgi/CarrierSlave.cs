@@ -67,7 +67,7 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 
 			var tgt = Target.FromActor(Master);
 
-			if (self.TraitOrDefault<AttackPlane>() != null) // Let attack planes approach me first, before landing.
+			if (self.TraitOrDefault<AttackAircraft>() != null) // Let attack planes approach me first, before landing.
 				self.QueueActivity(new Fly(self, tgt, WDist.Zero, Info.LandingDistance));
 
 			self.QueueActivity(new EnterCarrierMaster(self, Master, spawnerMaster, EnterBehaviour.Exit, Info.CloseEnoughDistance));
@@ -85,7 +85,7 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 			if (ammoPools.Length == 0)
 				return false;
 
-			return ammoPools.All(x => !x.AutoReloads && !x.HasAmmo());
+			return ammoPools.All(x => !x.HasAmmo()); // TODO same autoreaload hack as previously
 		}
 
 		public virtual void OnBecomingIdle(Actor self)

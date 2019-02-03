@@ -19,10 +19,10 @@ namespace OpenRA.Mods.Common.Activities
 {
 	public class HeliAttack : Activity
 	{
-		readonly Aircraft helicopter;
-		readonly AttackHeli attackHeli;
+		readonly Aircraft aircraft;
+		readonly AttackAircraft attackAircraft;
 		readonly bool attackOnlyVisibleTargets;
-		readonly bool autoReloads;
+		readonly Rearmable rearmable;
 
 		Target target;
 		bool canHideUnderFog;
@@ -44,16 +44,16 @@ namespace OpenRA.Mods.Common.Activities
 		public HeliAttack(Actor self, Target target, bool attackOnlyVisibleTargets = true)
 		{
 			Target = target;
-			helicopter = self.Trait<Aircraft>();
-			attackHeli = self.Trait<AttackHeli>();
+			aircraft = self.Trait<Aircraft>();
+			attackAircraft = self.Trait<AttackAircraft>();
 			this.attackOnlyVisibleTargets = attackOnlyVisibleTargets;
-			autoReloads = self.TraitsImplementing<AmmoPool>().All(p => p.AutoReloads);
+			rearmable = self.TraitOrDefault<Rearmable>();
 		}
 
 		public override Activity Tick(Actor self)
 		{
 			// Refuse to take off if it would land immediately again.
-			if (helicopter.ForceLanding)
+			if (aircraft.ForceLanding)
 			{
 				Cancel(self);
 				return NextActivity;
@@ -63,7 +63,7 @@ namespace OpenRA.Mods.Common.Activities
 				return NextActivity;
 
 			var pos = self.CenterPosition;
-			var targetPos = attackHeli.GetTargetPosition(pos, target);
+			var targetPos = attackAircraft.GetTargetPosition(pos, target);
 			if (attackOnlyVisibleTargets && target.Type == TargetType.Actor && canHideUnderFog
 				&& !target.Actor.CanBeViewedByPlayer(self.Owner))
 			{
@@ -74,36 +74,36 @@ namespace OpenRA.Mods.Common.Activities
 				return new HeliFly(self, newTarget);
 			}
 
-			// If all valid weapons have depleted their ammo and RearmBuilding is defined, return to RearmBuilding to reload and then resume the activity
-			if (!autoReloads && helicopter.Info.RearmBuildings.Any() && attackHeli.Armaments.All(x => x.IsTraitPaused || !x.Weapon.IsValidAgainst(target, self.World, self)))
-				return ActivityUtils.SequenceActivities(new HeliReturnToBase(self, helicopter.Info.AbortOnResupply), this);
+			// If all valid weapons have depleted their ammo and Rearmable trait exists, return to RearmActor to reload and then resume the activity
+			if (rearmable != null && attackAircraft.Armaments.All(x => x.IsTraitPaused || !x.Weapon.IsValidAgainst(target, self.World, self)))
+				return ActivityUtils.SequenceActivities(new HeliReturnToBase(self, aircraft.Info.AbortOnResupply), this);
 
 			var dist = targetPos - pos;
 
 			// Can rotate facing while ascending
-			var desiredFacing = dist.HorizontalLengthSquared != 0 ? dist.Yaw.Facing : helicopter.Facing;
-			helicopter.Facing = Util.TickFacing(helicopter.Facing, desiredFacing, helicopter.TurnSpeed);
+			var desiredFacing = dist.HorizontalLengthSquared != 0 ? dist.Yaw.Facing : aircraft.Facing;
+			aircraft.Facing = Util.TickFacing(aircraft.Facing, desiredFacing, aircraft.TurnSpeed);
 
-			if (HeliFly.AdjustAltitude(self, helicopter, helicopter.Info.CruiseAltitude))
+			if (HeliFly.AdjustAltitude(self, aircraft, aircraft.Info.CruiseAltitude))
 				return this;
 
 			// Fly towards the target
-			if (!target.IsInRange(pos, attackHeli.GetMaximumRangeVersusTarget(target)))
-				helicopter.SetPosition(self, helicopter.CenterPosition + helicopter.FlyStep(desiredFacing));
+			if (!target.IsInRange(pos, attackAircraft.GetMaximumRangeVersusTarget(target)))
+				aircraft.SetPosition(self, aircraft.CenterPosition + aircraft.FlyStep(desiredFacing));
 
 			// Fly backwards from the target
-			if (target.IsInRange(pos, attackHeli.GetMinimumRangeVersusTarget(target)))
+			if (target.IsInRange(pos, attackAircraft.GetMinimumRangeVersusTarget(target)))
 			{
 				// Facing 0 doesn't work with the following position change
 				var facing = 1;
 				if (desiredFacing != 0)
 					facing = desiredFacing;
-				else if (helicopter.Facing != 0)
-					facing = helicopter.Facing;
-				helicopter.SetPosition(self, helicopter.CenterPosition + helicopter.FlyStep(-facing));
+				else if (aircraft.Facing != 0)
+					facing = aircraft.Facing;
+				aircraft.SetPosition(self, aircraft.CenterPosition + aircraft.FlyStep(-facing));
 			}
 
-			attackHeli.DoAttack(self, target);
+			attackAircraft.DoAttack(self, target);
 
 			return this;
 		}

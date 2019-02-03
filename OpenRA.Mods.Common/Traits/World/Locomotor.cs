@@ -12,7 +12,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using OpenRA.Mods.Common.Pathfinder;
 using OpenRA.Primitives;
 using OpenRA.Traits;
 
@@ -61,13 +60,13 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly bool MoveIntoShroud = true;
 
 		[Desc("e.g. crate, wall, infantry")]
-		public readonly HashSet<string> Crushes = new HashSet<string>();
+		public readonly BitSet<CrushClass> Crushes = default(BitSet<CrushClass>);
 
 		[Desc("Types of damage that are caused while crushing. Leave empty for no damage types.")]
-		public readonly HashSet<string> CrushDamageTypes = new HashSet<string>();
+		public readonly BitSet<DamageType> CrushDamageTypes = default(BitSet<DamageType>);
 
 		[FieldLoader.LoadUsing("LoadSpeeds", true)]
-		[Desc("Set Water: 0 for ground units and lower the value on rough terrain.")]
+		[Desc("Lower the value on rough terrain. Leave out entries for impassable terrain.")]
 		public readonly Dictionary<string, TerrainInfo> TerrainSpeeds;
 
 		protected static object LoadSpeeds(MiniYaml y)
@@ -76,11 +75,14 @@ namespace OpenRA.Mods.Common.Traits
 			foreach (var t in y.ToDictionary()["TerrainSpeeds"].Nodes)
 			{
 				var speed = FieldLoader.GetValue<int>("speed", t.Value.Value);
-				var nodesDict = t.Value.ToDictionary();
-				var cost = nodesDict.ContainsKey("PathingCost")
-					? FieldLoader.GetValue<int>("cost", nodesDict["PathingCost"].Value)
-					: 10000 / speed;
-				ret.Add(t.Key, new TerrainInfo(speed, cost));
+				if (speed > 0)
+				{
+					var nodesDict = t.Value.ToDictionary();
+					var cost = nodesDict.ContainsKey("PathingCost")
+						? FieldLoader.GetValue<int>("cost", nodesDict["PathingCost"].Value)
+						: 10000 / speed;
+					ret.Add(t.Key, new TerrainInfo(speed, cost));
+				}
 			}
 
 			return ret;
@@ -278,7 +280,7 @@ namespace OpenRA.Mods.Common.Traits
 			}
 
 			// If we cannot crush the other actor in our way, we are blocked.
-			if (Crushes == null || Crushes.Count == 0)
+			if (Crushes.IsEmpty)
 				return true;
 
 			// If the other actor in our way cannot be crushed, we are blocked.

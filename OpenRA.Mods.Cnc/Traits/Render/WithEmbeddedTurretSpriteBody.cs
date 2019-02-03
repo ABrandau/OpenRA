@@ -27,11 +27,16 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 
 		public override IEnumerable<IActorPreview> RenderPreviewSprites(ActorPreviewInitializer init, RenderSpritesInfo rs, string image, int facings, PaletteReference p)
 		{
+			if (!EnabledByDefault)
+				yield break;
+
 			var t = init.Actor.TraitInfos<TurretedInfo>().FirstOrDefault();
 			var wsb = init.Actor.TraitInfos<WithSpriteBodyInfo>().FirstOrDefault();
 
 			// Show the correct turret facing
-			var anim = new Animation(init.World, image, () => t.InitialFacing);
+			var facing = init.Contains<TurretFacingInit>() ? init.Get<TurretFacingInit>().Value(init.World) : t.InitialFacing;
+
+			var anim = new Animation(init.World, image, () => facing);
 			anim.PlayRepeating(RenderSprites.NormalizeSequence(anim, init.GetDamageState(), wsb.Sequence));
 
 			yield return new SpriteActorPreview(anim, () => WVec.Zero, () => 0, p, rs.Scale);

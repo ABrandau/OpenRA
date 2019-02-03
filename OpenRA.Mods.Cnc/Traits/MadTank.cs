@@ -14,7 +14,6 @@ using System.Drawing;
 using System.Linq;
 using OpenRA.Activities;
 using OpenRA.GameRules;
-using OpenRA.Mods.Cnc.Activities;
 using OpenRA.Mods.Common;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Orders;
@@ -50,11 +49,15 @@ namespace OpenRA.Mods.Cnc.Traits
 
 		[VoiceReference] public readonly string Voice = "Action";
 
+		[GrantedConditionReference]
+		[Desc("The condition to grant to self while deployed.")]
+		public readonly string DeployedCondition = null;
+
 		public WeaponInfo ThumpDamageWeaponInfo { get; private set; }
 		public WeaponInfo DetonationWeaponInfo { get; private set; }
 
 		[Desc("Types of damage that this trait causes to self while self-destructing. Leave empty for no damage types.")]
-		public readonly HashSet<string> DamageTypes = new HashSet<string>();
+		public readonly BitSet<DamageType> DamageTypes = default(BitSet<DamageType>);
 
 		public object Create(ActorInitializer init) { return new MadTank(init.Self, this); }
 		public void RulesetLoaded(Ruleset rules, ActorInfo ai)
@@ -75,12 +78,13 @@ namespace OpenRA.Mods.Cnc.Traits
 		}
 	}
 
-	class MadTank : IIssueOrder, IResolveOrder, IOrderVoice, ITick, IPreventsTeleport, IIssueDeployOrder
+	class MadTank : INotifyCreated, IIssueOrder, IResolveOrder, IOrderVoice, ITick, IIssueDeployOrder
 	{
 		readonly Actor self;
 		readonly MadTankInfo info;
 		readonly WithFacingSpriteBody wfsb;
 		readonly ScreenShaker screenShaker;
+		ConditionManager conditionManager;
 		bool deployed;
 		int tick;
 
@@ -90,6 +94,11 @@ namespace OpenRA.Mods.Cnc.Traits
 			this.info = info;
 			wfsb = self.Trait<WithFacingSpriteBody>();
 			screenShaker = self.World.WorldActor.Trait<ScreenShaker>();
+		}
+
+		void INotifyCreated.Created(Actor self)
+		{
+			conditionManager = self.TraitOrDefault<ConditionManager>();
 		}
 
 		void ITick.Tick(Actor self)
@@ -127,7 +136,12 @@ namespace OpenRA.Mods.Cnc.Traits
 			return new Order(order.OrderID, self, target, queued);
 		}
 
-		Order IIssueDeployOrder.IssueDeployOrder(Actor self)
+		Order IIssueDeployOrder.IssueDeployOrder(Actor self, bool queued)
+		{
+			return new Order("Detonate", self, queued);
+		}
+
+		public Order IssueDeployOrder(Actor self)
 		{
 			return new Order("Detonate", self, false);
 		}
@@ -165,12 +179,13 @@ namespace OpenRA.Mods.Cnc.Traits
 				driverMobile.Nudge(driver, driver, true);
 		}
 
-		public bool PreventsTeleport(Actor self) { return deployed; }
-
 		void StartDetonationSequence()
 		{
 			if (deployed)
 				return;
+
+			if (conditionManager != null && !string.IsNullOrEmpty(info.DeployedCondition))
+				conditionManager.GrantCondition(self, info.DeployedCondition);
 
 			self.World.AddFrameEndTask(w => EjectDriver());
 			if (info.ThumpSequence != null)
@@ -200,7 +215,8 @@ namespace OpenRA.Mods.Cnc.Traits
 			}
 			else if (order.OrderString == "Detonate")
 			{
-				self.CancelActivity();
+				if (!order.Queued)
+					self.CancelActivity();
 				self.QueueActivity(new CallFunc(StartDetonationSequence));
 			}
 		}

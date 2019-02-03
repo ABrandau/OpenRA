@@ -11,69 +11,55 @@
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Mods.Common.Traits;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.AS.Traits
 {
+	public class ProximityBountyType { }
+
 	[Desc("When killed, this actor causes nearby actors with the ProximityBounty trait to receive money.")]
-	class GivesProximityBountyInfo : ITraitInfo
+	class GivesProximityBountyInfo : ConditionalTraitInfo
 	{
 		[Desc("Percentage of the killed actor's Cost or CustomSellValue to be given.")]
 		public readonly int Percentage = 10;
-
-		[Desc("Scale bounty based on the veterancy of the killed unit. The value is given in percent.")]
-		public readonly int LevelMod = 125;
 
 		[Desc("Stance the attacking player needs to grant bounty to actors.")]
 		public readonly Stance ValidStances = Stance.Neutral | Stance.Enemy;
 
 		[Desc("DeathTypes for which a bounty should be granted.",
 		      "Use an empty list (the default) to allow all DeathTypes.")]
-		public readonly HashSet<string> DeathTypes = new HashSet<string>();
+		public readonly BitSet<DamageType> DeathTypes = default(BitSet<DamageType>);
 
 		[Desc("Bounty types for the ProximityBounty traits which a bounty should be granted.",
 		      "Use an empty list (the default) to allow all of them.")]
-		public readonly HashSet<string> BountyTypes = new HashSet<string>();
+		public readonly BitSet<ProximityBountyType> BountyTypes = default(BitSet<ProximityBountyType>);
 
-		public object Create(ActorInitializer init) { return new GivesProximityBounty(init.Self, this); }
+		public override object Create(ActorInitializer init) { return new GivesProximityBounty(init.Self, this); }
 	}
 
-	class GivesProximityBounty : INotifyKilled, INotifyCreated
+	class GivesProximityBounty : ConditionalTrait<GivesProximityBountyInfo>, INotifyKilled, INotifyCreated
 	{
-		readonly GivesProximityBountyInfo info;
 		public HashSet<ProximityBounty> Collectors;
-		GainsExperience gainsExp;
 		Cargo cargo;
 
 		public GivesProximityBounty(Actor self, GivesProximityBountyInfo info)
+			: base(info)
 		{
-			this.info = info;
 			Collectors = new HashSet<ProximityBounty>();
 		}
 
 		void INotifyCreated.Created(Actor self)
 		{
-			gainsExp = self.TraitOrDefault<GainsExperience>();
 			cargo = self.TraitOrDefault<Cargo>();
-		}
-
-		int GetMultiplier()
-		{
-			// returns 100's as 1, so as to keep accuracy for longer.
-			if (gainsExp == null)
-				return 100;
-
-			var slevel = gainsExp.Level;
-			return (slevel > 0) ? slevel * info.LevelMod : 100;
 		}
 
 		int GetBountyValue(Actor self)
 		{
-			// Divide by 10000 because of GetMultiplier and info.Percentage.
-			return self.GetSellValue() * GetMultiplier() * info.Percentage / 10000;
+			return !IsTraitDisabled ? self.GetSellValue() * Info.Percentage / 100 : 0;
 		}
 
-		int GetDisplayedBountyValue(Actor self, HashSet<string> deathTypes, string bountyType)
+		int GetDisplayedBountyValue(Actor self, BitSet<DamageType> deathTypes, BitSet<ProximityBountyType> bountyType)
 		{
 			var bounty = GetBountyValue(self);
 			if (cargo == null)
@@ -81,8 +67,8 @@ namespace OpenRA.Mods.AS.Traits
 
 			foreach (var a in cargo.Passengers)
 			{
-				var givesProximityBounty = a.TraitsImplementing<GivesProximityBounty>().Where(gpb => deathTypes.Overlaps(gpb.info.DeathTypes)
-					&& (gpb.info.BountyTypes.Count == 0 || gpb.info.BountyTypes.Contains(bountyType)));
+				var givesProximityBounty = a.TraitsImplementing<GivesProximityBounty>().Where(gpb => deathTypes.Overlaps(gpb.Info.DeathTypes)
+					&& gpb.Info.BountyTypes.Overlaps(bountyType));
 				foreach (var gpb in givesProximityBounty)
 					bounty += gpb.GetDisplayedBountyValue(a, deathTypes, bountyType);
 			}
@@ -98,15 +84,15 @@ namespace OpenRA.Mods.AS.Traits
 			if (e.Attacker == null || e.Attacker.Disposed)
 				return;
 
-			if (!info.ValidStances.HasStance(e.Attacker.Owner.Stances[self.Owner]))
+			if (!Info.ValidStances.HasStance(e.Attacker.Owner.Stances[self.Owner]))
 				return;
 
-			if (info.DeathTypes.Count > 0 && !e.Damage.DamageTypes.Overlaps(info.DeathTypes))
+			if (!Info.DeathTypes.IsEmpty && !e.Damage.DamageTypes.Overlaps(Info.DeathTypes))
 				return;
 
 			foreach (var c in Collectors)
 			{
-				if (info.BountyTypes.Count > 0 && !info.BountyTypes.Contains(c.Info.BountyType))
+				if (!Info.BountyTypes.Overlaps(c.Info.BountyType))
 					return;
 
 				if (!c.Info.ValidStances.HasStance(e.Attacker.Owner.Stances[self.Owner]))

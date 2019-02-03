@@ -126,6 +126,9 @@ namespace OpenRA.Network
 			public bool IsInvalid { get { return State == ClientState.Invalid; } }
 			public bool IsObserver { get { return Slot == null; } }
 
+			// Linked to the online player database
+			public string Fingerprint;
+
 			public MiniYamlNode Serialize()
 			{
 				return new MiniYamlNode("Client@{0}".F(Index), FieldSaver.Save(this));
@@ -195,9 +198,9 @@ namespace OpenRA.Network
 			public int OrderLatency = 3; // net tick frames (x 120 = ms)
 			public int RandomSeed = 0;
 			public bool AllowSpectators = true;
-			public bool AllowVersionMismatch;
 			public string GameUid;
 			public bool EnableSingleplayer;
+			public bool EnableSyncReports;
 			public bool Dedicated;
 
 			[FieldLoader.Ignore]

@@ -9,7 +9,6 @@
  */
 #endregion
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Graphics;
@@ -33,6 +32,9 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 		public override IEnumerable<IActorPreview> RenderPreviewSprites(ActorPreviewInitializer init, RenderSpritesInfo rs, string image, int facings, PaletteReference p)
 		{
+			if (!EnabledByDefault)
+				yield break;
+
 			var anim = new Animation(init.World, image);
 			anim.PlayFetchIndex(RenderSprites.NormalizeSequence(anim, init.GetDamageState(), Sequence), () => 0);
 
@@ -60,7 +62,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 		void UpdateState(Actor self)
 		{
-			if (renderOpen)
+			if (renderOpen || IsTraitPaused)
 				DefaultAnimation.PlayRepeating(NormalizeSequence(self, gateBodyInfo.OpenSequence));
 			else
 				DefaultAnimation.PlayFetchIndex(NormalizeSequence(self, Info.Sequence), GetGateFrame);
@@ -88,8 +90,10 @@ namespace OpenRA.Mods.Common.Traits.Render
 			UpdateState(self);
 		}
 
-		protected override void OnBuildComplete(Actor self)
+		protected override void TraitEnabled(Actor self)
 		{
+			base.TraitEnabled(self);
+
 			UpdateState(self);
 			UpdateNeighbours(self);
 		}

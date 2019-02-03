@@ -9,7 +9,6 @@
  */
 #endregion
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Traits;
@@ -91,7 +90,7 @@ namespace OpenRA.Mods.Common.Traits
 			return true;
 		}
 
-		public int GrantCondition(Actor self, object source, int duration = 0)
+		public int GrantCondition(Actor self, object source, int duration = 0, int remaining = 0)
 		{
 			if (!CanGrantCondition(self, source))
 				return ConditionManager.InvalidConditionToken;
@@ -99,6 +98,11 @@ namespace OpenRA.Mods.Common.Traits
 			var token = conditionManager.GrantCondition(self, Info.Condition);
 			HashSet<int> permanent;
 			permanentTokens.TryGetValue(source, out permanent);
+
+			// Callers can override the amount of time remaining by passing a value
+			// between 1 and the duration
+			if (remaining <= 0 || remaining > duration)
+				remaining = duration;
 
 			if (duration > 0)
 			{
@@ -137,7 +141,7 @@ namespace OpenRA.Mods.Common.Traits
 					}
 				}
 
-				var timedToken = new TimedToken(token, self, source, duration);
+				var timedToken = new TimedToken(token, self, source, remaining);
 				var index = timedTokens.FindIndex(t => t.Expires >= timedToken.Expires);
 				if (index >= 0)
 					timedTokens.Insert(index, timedToken);

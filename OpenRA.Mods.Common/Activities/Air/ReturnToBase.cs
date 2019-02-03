@@ -20,8 +20,9 @@ namespace OpenRA.Mods.Common.Activities
 {
 	public class ReturnToBase : Activity
 	{
-		readonly Aircraft plane;
-		readonly AircraftInfo planeInfo;
+		readonly Aircraft aircraft;
+		readonly RepairableInfo repairableInfo;
+		readonly Rearmable rearmable;
 		readonly bool alwaysLand;
 		readonly bool abortOnResupply;
 		bool isCalculated;
@@ -33,43 +34,52 @@ namespace OpenRA.Mods.Common.Activities
 			this.dest = dest;
 			this.alwaysLand = alwaysLand;
 			this.abortOnResupply = abortOnResupply;
-			plane = self.Trait<Aircraft>();
-			planeInfo = self.Info.TraitInfo<AircraftInfo>();
+			aircraft = self.Trait<Aircraft>();
+			repairableInfo = self.Info.TraitInfoOrDefault<RepairableInfo>();
+			rearmable = self.TraitOrDefault<Rearmable>();
 		}
 
-		public static Actor ChooseAirfield(Actor self, bool unreservedOnly)
+		public static Actor ChooseResupplier(Actor self, bool unreservedOnly)
 		{
-			var rearmBuildings = self.Info.TraitInfo<AircraftInfo>().RearmBuildings;
+			var rearmInfo = self.Info.TraitInfoOrDefault<RearmableInfo>();
+			if (rearmInfo == null)
+				return null;
+
 			return self.World.ActorsHavingTrait<Reservable>()
 				.Where(a => a.Owner == self.Owner
-					&& rearmBuildings.Contains(a.Info.Name)
+					&& rearmInfo.RearmActors.Contains(a.Info.Name)
 					&& (!unreservedOnly || !Reservable.IsReserved(a)))
 				.ClosestTo(self);
+		}
+
+		int CalculateTurnRadius(int speed)
+		{
+			return 45 * speed / aircraft.Info.TurnSpeed;
 		}
 
 		void Calculate(Actor self)
 		{
 			if (dest == null || dest.IsDead || Reservable.IsReserved(dest))
-				dest = ChooseAirfield(self, true);
+				dest = ChooseResupplier(self, true);
 
 			if (dest == null)
 				return;
 
 			var landPos = dest.CenterPosition;
-			var altitude = planeInfo.CruiseAltitude.Length;
+			var altitude = aircraft.Info.CruiseAltitude.Length;
 
 			// Distance required for descent.
-			var landDistance = altitude * 1024 / planeInfo.MaximumPitch.Tan();
+			var landDistance = altitude * 1024 / aircraft.Info.MaximumPitch.Tan();
 
 			// Land towards the east
 			var approachStart = landPos + new WVec(-landDistance, 0, altitude);
 
 			// Add 10% to the turning radius to ensure we have enough room
-			var speed = plane.MovementSpeed * 32 / 35;
+			var speed = aircraft.MovementSpeed * 32 / 35;
 			var turnRadius = CalculateTurnRadius(speed);
 
 			// Find the center of the turning circles for clockwise and counterclockwise turns
-			var angle = WAngle.FromFacing(plane.Facing);
+			var angle = WAngle.FromFacing(aircraft.Facing);
 			var fwd = -new WVec(angle.Sin(), angle.Cos(), 0);
 
 			// Work out whether we should turn clockwise or counter-clockwise for approach
@@ -83,7 +93,10 @@ namespace OpenRA.Mods.Common.Activities
 			var posCenter = new WPos(cp.X, cp.Y, altitude);
 			var approachCenter = approachStart + new WVec(0, turnRadius * Math.Sign(self.CenterPosition.Y - approachStart.Y), 0);
 			var tangentDirection = approachCenter - posCenter;
-			var tangentOffset = new WVec(-tangentDirection.Y, tangentDirection.X, 0) * turnRadius / tangentDirection.Length;
+			var tangentLength = tangentDirection.Length;
+			var tangentOffset = WVec.Zero;
+			if (tangentLength != 0)
+				tangentOffset = new WVec(-tangentDirection.Y, tangentDirection.X, 0) * turnRadius / tangentLength;
 
 			// TODO: correctly handle CCW <-> CW turns
 			if (tangentOffset.X > 0)
@@ -101,18 +114,18 @@ namespace OpenRA.Mods.Common.Activities
 			if (alwaysLand)
 				return true;
 
-			if (planeInfo.RepairBuildings.Contains(dest.Info.Name) && self.GetDamageState() != DamageState.Undamaged)
+			if (repairableInfo != null && repairableInfo.RepairBuildings.Contains(dest.Info.Name) && self.GetDamageState() != DamageState.Undamaged)
 				return true;
 
-			return planeInfo.RearmBuildings.Contains(dest.Info.Name) && self.TraitsImplementing<AmmoPool>()
-					.Any(p => !p.AutoReloads && !p.FullAmmo());
+			return rearmable != null && rearmable.Info.RearmActors.Contains(dest.Info.Name)
+					&& rearmable.RearmableAmmoPools.Any(p => !p.FullAmmo());
 		}
 
 		public override Activity Tick(Actor self)
 		{
 			// Refuse to take off if it would land immediately again.
 			// Special case: Don't kill other deploy hotkey activities.
-			if (plane.ForceLanding)
+			if (aircraft.ForceLanding)
 				return NextActivity;
 
 			if (IsCanceled || self.IsDead)
@@ -123,12 +136,12 @@ namespace OpenRA.Mods.Common.Activities
 
 			if (dest == null || dest.IsDead)
 			{
-				var nearestAfld = ChooseAirfield(self, false);
+				var nearestResupplier = ChooseResupplier(self, false);
 
-				if (nearestAfld != null)
+				if (nearestResupplier != null)
 					return ActivityUtils.SequenceActivities(
-						new Fly(self, Target.FromActor(nearestAfld), WDist.Zero, plane.Info.WaitDistanceFromResupplyBase),
-						new FlyCircle(self, plane.Info.NumberOfTicksToVerifyAvailableAirport),
+						new Fly(self, Target.FromActor(nearestResupplier), WDist.Zero, aircraft.Info.WaitDistanceFromResupplyBase),
+						new FlyCircle(self, aircraft.Info.NumberOfTicksToVerifyAvailableAirport),
 						this);
 				else
 				{
@@ -140,7 +153,7 @@ namespace OpenRA.Mods.Common.Activities
 
 			List<Activity> landingProcedures = new List<Activity>();
 
-			var turnRadius = CalculateTurnRadius(planeInfo.Speed);
+			var turnRadius = CalculateTurnRadius(aircraft.Info.Speed);
 
 			landingProcedures.Add(new Fly(self, Target.FromPos(w1), WDist.Zero, new WDist(turnRadius * 3)));
 			landingProcedures.Add(new Fly(self, Target.FromPos(w2)));
@@ -150,7 +163,7 @@ namespace OpenRA.Mods.Common.Activities
 
 			if (ShouldLandAtBuilding(self, dest))
 			{
-				plane.MakeReservation(dest);
+				aircraft.MakeReservation(dest);
 
 				landingProcedures.Add(new Land(self, Target.FromActor(dest)));
 				landingProcedures.Add(new ResupplyAircraft(self));
@@ -160,11 +173,6 @@ namespace OpenRA.Mods.Common.Activities
 				landingProcedures.Add(NextActivity);
 
 			return ActivityUtils.SequenceActivities(landingProcedures.ToArray());
-		}
-
-		int CalculateTurnRadius(int speed)
-		{
-			return 45 * speed / planeInfo.TurnSpeed;
 		}
 	}
 }

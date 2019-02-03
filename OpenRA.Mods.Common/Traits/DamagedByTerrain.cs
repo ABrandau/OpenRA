@@ -9,15 +9,14 @@
  */
 #endregion
 
-using System.Collections.Generic;
 using System.Linq;
-using OpenRA.GameRules;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
 {
 	[Desc("This actor receives damage from the given weapon when on the specified terrain type.")]
-	class DamagedByTerrainInfo : ConditionalTraitInfo, Requires<HealthInfo>
+	class DamagedByTerrainInfo : ConditionalTraitInfo, Requires<IHealthInfo>
 	{
 		[Desc("Amount of damage received per DamageInterval ticks.")]
 		[FieldLoader.Require] public readonly int Damage = 0;
@@ -26,7 +25,7 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly int DamageInterval = 0;
 
 		[Desc("Apply the damage using these damagetypes.")]
-		public readonly HashSet<string> DamageTypes = new HashSet<string>();
+		public readonly BitSet<DamageType> DamageTypes = default(BitSet<DamageType>);
 
 		[Desc("Terrain types where the actor will take damage.")]
 		[FieldLoader.Require] public readonly string[] Terrain = { };
@@ -42,14 +41,14 @@ namespace OpenRA.Mods.Common.Traits
 
 	class DamagedByTerrain : ConditionalTrait<DamagedByTerrainInfo>, ITick, ISync, INotifyAddedToWorld
 	{
-		readonly Health health;
+		readonly IHealth health;
 
 		[Sync] int damageTicks;
 		[Sync] int damageThreshold;
 
 		public DamagedByTerrain(Actor self, DamagedByTerrainInfo info) : base(info)
 		{
-			health = self.Trait<Health>();
+			health = self.Trait<IHealth>();
 		}
 
 		void INotifyAddedToWorld.AddedToWorld(Actor self)

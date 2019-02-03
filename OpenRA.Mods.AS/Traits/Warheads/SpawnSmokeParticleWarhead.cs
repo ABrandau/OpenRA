@@ -94,7 +94,7 @@ namespace OpenRA.Mods.AS.Warheads
 
 			if (!firedBy.IsDead)
 			{
-				firedBy.World.AddFrameEndTask(w => w.Add(new SmokeParticle(Neutral ? firedBy : firedBy.World.WorldActor, this, target.CenterPosition)));
+				firedBy.World.AddFrameEndTask(w => w.Add(new SmokeParticle(!Neutral ? firedBy : firedBy.World.WorldActor, this, target.CenterPosition)));
 			}
 		}
 	}

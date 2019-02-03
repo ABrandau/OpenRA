@@ -10,14 +10,16 @@
 
 using OpenRA.Mods.Common.Effects;
 using OpenRA.Mods.Common.Traits;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.AS.Traits
 {
 	public class ProximityBountyInfo : ConditionalTraitInfo
 	{
+		[FieldLoader.Require]
 		[Desc("The range within bounty gets collected.")]
-		public readonly WDist Range = WDist.FromCells(7);
+		public readonly WDist Range;
 
 		[Desc("The maximum vertical range above terrain within bounty gets collected.",
 		      "Ignored if 0 (actors are upgraded regardless of vertical distance).")]
@@ -30,7 +32,7 @@ namespace OpenRA.Mods.AS.Traits
 		public readonly int Delay = 50;
 
 		[Desc("The type which allows the actor to collect nearby bounty.")]
-		public readonly string BountyType = "Bounty";
+		public readonly BitSet<ProximityBountyType> BountyType = default(BitSet<ProximityBountyType>);
 
 		[Desc("Whether to show a floating text announcing the won bounty.")]
 		public readonly bool ShowBounty = true;
@@ -139,7 +141,7 @@ namespace OpenRA.Mods.AS.Traits
 				gpb.Collectors.Add(this);
 		}
 
-		void INotifyOtherProduction.UnitProducedByOther(Actor self, Actor producer, Actor produced, string productionType)
+		void INotifyOtherProduction.UnitProducedByOther(Actor self, Actor producer, Actor produced, string productionType, TypeDictionary init)
 		{
 			// If the produced Actor doesn't occupy space, it can't be in range
 			if (produced.OccupiesSpace == null)

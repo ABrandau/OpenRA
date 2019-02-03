@@ -16,6 +16,7 @@ using System.IO;
 using System.Linq;
 using OpenRA.Graphics;
 using OpenRA.Mods.Common.FileFormats;
+using OpenRA.Primitives;
 
 namespace OpenRA.Mods.Common.SpriteLoaders
 {
@@ -57,8 +58,9 @@ namespace OpenRA.Mods.Common.SpriteLoaders
 			return b == 0x20 || b == 0x40 || b == 0x80;
 		}
 
-		public bool TryParseSprite(Stream s, out ISpriteFrame[] frames)
+		public bool TryParseSprite(Stream s, out ISpriteFrame[] frames, out TypeDictionary metadata)
 		{
+			metadata = null;
 			if (!IsShpTD(s))
 			{
 				frames = null;
@@ -73,78 +75,6 @@ namespace OpenRA.Mods.Common.SpriteLoaders
 	public class ShpTDSprite
 	{
 		enum Format { XORPrev = 0x20, XORLCW = 0x40, LCW = 0x80 }
-
-		class TrimmedFrame : ISpriteFrame
-		{
-			public Size Size { get; private set; }
-			public Size FrameSize { get; private set; }
-			public float2 Offset { get; private set; }
-			public byte[] Data { get; private set; }
-			public bool DisableExportPadding { get { return false; } }
-
-			public TrimmedFrame(ImageHeader header)
-			{
-				var origData = header.Data;
-				var origSize = header.Size;
-				var top = origSize.Height - 1;
-				var bottom = 0;
-				var left = origSize.Width - 1;
-				var right = 0;
-
-				// Scan frame data to find left-, top-, right-, bottom-most
-				// rows/columns with non-zero pixel data
-				var i = 0;
-				for (var y = 0; y < origSize.Height; y++)
-				{
-					for (var x = 0; x < origSize.Width; x++, i++)
-					{
-						if (origData[i] != 0)
-						{
-							top = Math.Min(y, top);
-							bottom = Math.Max(y, bottom);
-							left = Math.Min(x, left);
-							right = Math.Max(x, right);
-						}
-					}
-				}
-
-				var trimmedWidth = right - left + 1;
-				var trimmedHeight = bottom - top + 1;
-
-				// Pad the dimensions to an even number to avoid issues with half-integer offsets
-				var widthFudge = trimmedWidth % 2;
-				var heightFudge = trimmedHeight % 2;
-				var destWidth = trimmedWidth + widthFudge;
-				var destHeight = trimmedHeight + heightFudge;
-
-				if (trimmedWidth == origSize.Width && trimmedHeight == origSize.Height)
-				{
-					// Nothing to trim, so copy old data directly
-					Size = header.Size;
-					FrameSize = header.FrameSize;
-					Offset = header.Offset;
-					Data = header.Data;
-				}
-				else if (trimmedWidth > 0 && trimmedHeight > 0)
-				{
-					// Trim frame
-					Data = new byte[destWidth * destHeight];
-					for (var y = 0; y < trimmedHeight; y++)
-						Array.Copy(origData, (y + top) * origSize.Width + left, Data, y * destWidth, trimmedWidth);
-
-					Size = new Size(destWidth, destHeight);
-					FrameSize = origSize;
-					Offset = 0.5f * new float2(
-						left + right + widthFudge - origSize.Width + 1,
-						top + bottom + heightFudge - origSize.Height + 1);
-				}
-				else
-				{
-					// Empty frame
-					Data = new byte[0];
-				}
-			}
-		}
 
 		class ImageHeader : ISpriteFrame
 		{
@@ -204,6 +134,7 @@ namespace OpenRA.Mods.Common.SpriteLoaders
 
 			stream.Position += 4;
 			var headers = new ImageHeader[imageCount];
+			Frames = headers.AsReadOnly();
 			for (var i = 0; i < headers.Length; i++)
 				headers[i] = new ImageHeader(stream, this);
 
@@ -225,10 +156,6 @@ namespace OpenRA.Mods.Common.SpriteLoaders
 
 			foreach (var h in headers)
 				Decompress(h);
-
-			Frames = headers.Select(f => (ISpriteFrame)new TrimmedFrame(f))
-				.ToArray()
-				.AsReadOnly();
 		}
 
 		void Decompress(ImageHeader h)

@@ -17,7 +17,7 @@ using OpenRA.Traits;
 namespace OpenRA.Mods.AS.Traits
 {
 	[Desc("Renders an animation when when the actor is leaving from a production building.")]
-	public class WithExitOverlayInfo : ITraitInfo, Requires<RenderSpritesInfo>, Requires<BodyOrientationInfo>
+	public class WithExitOverlayInfo : ConditionalTraitInfo, Requires<RenderSpritesInfo>, Requires<BodyOrientationInfo>
 	{
 		[Desc("Sequence name to use")]
 		[SequenceReference] public readonly string Sequence = "exit-overlay";
@@ -31,41 +31,29 @@ namespace OpenRA.Mods.AS.Traits
 		[Desc("Custom palette is a player palette BaseName")]
 		public readonly bool IsPlayerPalette = false;
 
-		public object Create(ActorInitializer init) { return new WithExitOverlay(init.Self, this); }
+		public override object Create(ActorInitializer init) { return new WithExitOverlay(init.Self, this); }
 	}
 
-	public class WithExitOverlay : INotifyDamageStateChanged, INotifyBuildComplete, INotifySold, INotifyProduction, ITick
+	public class WithExitOverlay : ConditionalTrait<WithExitOverlayInfo>, INotifyDamageStateChanged, INotifyProduction, ITick
 	{
 		readonly Animation overlay;
-		bool buildComplete, enable;
+		bool enable;
 		CPos exit;
 
 		public WithExitOverlay(Actor self, WithExitOverlayInfo info)
+			: base(info)
 		{
 			var rs = self.Trait<RenderSprites>();
 			var body = self.Trait<BodyOrientation>();
-
-			buildComplete = !self.Info.HasTraitInfo<BuildingInfo>(); // always render instantly for units
 
 			overlay = new Animation(self.World, rs.GetImage(self));
 			overlay.PlayRepeating(info.Sequence);
 
 			var anim = new AnimationWithOffset(overlay,
 				() => body.LocalToWorld(info.Offset.Rotate(body.QuantizeOrientation(self, self.Orientation))),
-				() => !buildComplete || !enable);
+				() => IsTraitDisabled || !enable);
 
 			rs.Add(anim, info.Palette, info.IsPlayerPalette);
-		}
-
-		public void BuildingComplete(Actor self)
-		{
-			buildComplete = true;
-		}
-
-		public void Sold(Actor self) { }
-		public void Selling(Actor self)
-		{
-			buildComplete = false;
 		}
 
 		public void DamageStateChanged(Actor self, AttackInfo e)

@@ -12,12 +12,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.GameRules;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
 {
 	[Desc("Bridge actor that can't be passed underneath.")]
-	class GroundLevelBridgeInfo : ITraitInfo, IRulesetLoaded, Requires<BuildingInfo>, Requires<HealthInfo>
+	class GroundLevelBridgeInfo : ITraitInfo, IRulesetLoaded, Requires<BuildingInfo>, Requires<IHealthInfo>
 	{
 		public readonly string TerrainType = "Bridge";
 
@@ -31,7 +32,7 @@ namespace OpenRA.Mods.Common.Traits
 		public WeaponInfo DemolishWeaponInfo { get; private set; }
 
 		[Desc("Types of damage that this bridge causes to units over/in path of it while being destroyed/repaired. Leave empty for no damage types.")]
-		public readonly HashSet<string> DamageTypes = new HashSet<string>();
+		public readonly BitSet<DamageType> DamageTypes = default(BitSet<DamageType>);
 
 		public void RulesetLoaded(Ruleset rules, ActorInfo ai)
 		{
@@ -52,13 +53,13 @@ namespace OpenRA.Mods.Common.Traits
 		readonly Actor self;
 		readonly BridgeLayer bridgeLayer;
 		readonly IEnumerable<CPos> cells;
-		readonly Health health;
+		readonly IHealth health;
 
 		public GroundLevelBridge(Actor self, GroundLevelBridgeInfo info)
 		{
 			Info = info;
 			this.self = self;
-			health = self.Trait<Health>();
+			health = self.Trait<IHealth>();
 
 			bridgeLayer = self.World.WorldActor.Trait<BridgeLayer>();
 			var buildingInfo = self.Info.TraitInfo<BuildingInfo>();

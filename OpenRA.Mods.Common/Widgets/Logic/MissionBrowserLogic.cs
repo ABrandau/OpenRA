@@ -11,13 +11,11 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using OpenRA.Graphics;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Network;
-using OpenRA.Primitives;
 using OpenRA.Widgets;
 
 namespace OpenRA.Mods.Common.Widgets.Logic
@@ -374,11 +372,12 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			if (selectedMap.InvalidCustomRules)
 				return;
 
-			var orders = new[] {
-				Order.Command("option gamespeed {0}".F(gameSpeed)),
-				Order.Command("option difficulty {0}".F(difficulty)),
-				Order.Command("state {0}".F(Session.ClientState.Ready))
-			};
+			var orders = new List<Order>();
+			if (difficulty != null)
+				orders.Add(Order.Command("option difficulty {0}".F(difficulty)));
+
+			orders.Add(Order.Command("option gamespeed {0}".F(gameSpeed)));
+			orders.Add(Order.Command("state {0}".F(Session.ClientState.Ready)));
 
 			var missionData = selectedMap.Rules.Actors["world"].TraitInfoOrDefault<MissionDataInfo>();
 			if (missionData != null && missionData.StartVideo != null && modData.DefaultFileSystem.Exists(missionData.StartVideo))

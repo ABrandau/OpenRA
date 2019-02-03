@@ -9,9 +9,8 @@
  */
 #endregion
 
-using System.Collections.Generic;
-using System.Linq;
 using OpenRA.Mods.Common.Effects;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
@@ -33,7 +32,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		[Desc("DeathTypes for which shroud will be revealed.",
 			"Use an empty list (the default) to allow all DeathTypes.")]
-		public readonly HashSet<string> DeathTypes = new HashSet<string>();
+		public readonly BitSet<DamageType> DeathTypes = default(BitSet<DamageType>);
 
 		public override object Create(ActorInitializer init) { return new RevealOnDeath(init.Self, this); }
 	}
@@ -50,13 +49,10 @@ namespace OpenRA.Mods.Common.Traits
 
 		void INotifyKilled.Killed(Actor self, AttackInfo attack)
 		{
-			if (IsTraitDisabled)
+			if (IsTraitDisabled || !self.IsInWorld)
 				return;
 
-			if (!self.IsInWorld)
-				return;
-
-			if (info.DeathTypes.Count > 0 && !attack.Damage.DamageTypes.Overlaps(info.DeathTypes))
+			if (!info.DeathTypes.IsEmpty && !attack.Damage.DamageTypes.Overlaps(info.DeathTypes))
 				return;
 
 			var owner = self.Owner;

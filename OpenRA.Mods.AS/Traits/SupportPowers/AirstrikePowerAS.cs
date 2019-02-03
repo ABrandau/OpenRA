@@ -105,7 +105,8 @@ namespace OpenRA.Mods.AS.Traits
 					{
 						if (info.Mission == AirstrikeMission.Attack)
 						{
-							a.QueueActivity(new FlyAttack(a, Target.FromPos(target + spawnOffset)));
+							var height = self.World.Map.DistanceAboveTerrain(target + spawnOffset);
+							a.QueueActivity(new FlyAttack(a, Target.FromPos(target + spawnOffset - new WVec(WDist.Zero, WDist.Zero, height))));
 						}
 						else
 						{
@@ -119,7 +120,8 @@ namespace OpenRA.Mods.AS.Traits
 					{
 						if (info.Mission == AirstrikeMission.Attack)
 						{
-							a.QueueActivity(new HeliAttack(a, Target.FromPos(target + spawnOffset)));
+							var height = self.World.Map.DistanceAboveTerrain(target + spawnOffset);
+							a.QueueActivity(new HeliAttack(a, Target.FromPos(target + spawnOffset - new WVec(WDist.Zero, WDist.Zero, height))));
 						}
 						else
 						{

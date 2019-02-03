@@ -15,7 +15,7 @@ using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits
 {
-	[Desc("Return to a player owned RearmBuildings. If none available, head back to base and circle over it.")]
+	[Desc("Return to a player owned RearmActor. If none available, head back to base and circle over it.")]
 	public class ReturnOnIdleInfo : ITraitInfo, Requires<AircraftInfo>
 	{
 		public object Create(ActorInitializer init) { return new ReturnOnIdle(init.Self, this); }
@@ -36,10 +36,10 @@ namespace OpenRA.Mods.Common.Traits
 			if (self.World.Map.DistanceAboveTerrain(self.CenterPosition).Length < aircraftInfo.MinAirborneAltitude)
 				return;
 
-			var airfield = ReturnToBase.ChooseAirfield(self, true);
-			if (airfield != null)
+			var resupplier = ReturnToBase.ChooseResupplier(self, true);
+			if (resupplier != null)
 			{
-				self.QueueActivity(new ReturnToBase(self, aircraftInfo.AbortOnResupply, airfield));
+				self.QueueActivity(new ReturnToBase(self, aircraftInfo.AbortOnResupply, resupplier));
 				self.QueueActivity(new ResupplyAircraft(self));
 			}
 			else

@@ -27,14 +27,12 @@ namespace OpenRA.Mods.Common.Traits
 		public override object Create(ActorInitializer init) { return new BaseProvider(init.Self, this); }
 	}
 
-	public class BaseProvider : PausableConditionalTrait<BaseProviderInfo>, ITick, INotifyCreated, IRenderAboveShroudWhenSelected, ISelectionBar
+	public class BaseProvider : PausableConditionalTrait<BaseProviderInfo>, ITick, IRenderAboveShroudWhenSelected, ISelectionBar
 	{
 		readonly DeveloperMode devMode;
 		readonly Actor self;
 		readonly bool allyBuildEnabled;
 		readonly bool buildRadiusEnabled;
-
-		Building building;
 
 		int total;
 		int progress;
@@ -45,14 +43,9 @@ namespace OpenRA.Mods.Common.Traits
 			this.self = self;
 			devMode = self.Owner.PlayerActor.Trait<DeveloperMode>();
 			progress = total = info.InitialDelay;
-			var mapBuildRadius = self.World.WorldActor.Trait<MapBuildRadius>();
-			allyBuildEnabled = mapBuildRadius.AllyBuildRadiusEnabled;
-			buildRadiusEnabled = mapBuildRadius.BuildRadiusEnabled;
-		}
-
-		void INotifyCreated.Created(Actor self)
-		{
-			building = self.TraitOrDefault<Building>();
+			var mapBuildRadius = self.World.WorldActor.TraitOrDefault<MapBuildRadius>();
+			allyBuildEnabled = mapBuildRadius != null && mapBuildRadius.AllyBuildRadiusEnabled;
+			buildRadiusEnabled = mapBuildRadius != null && mapBuildRadius.BuildRadiusEnabled;
 		}
 
 		void ITick.Tick(Actor self)
@@ -68,7 +61,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public bool Ready()
 		{
-			if (IsTraitDisabled || IsTraitPaused || (building != null && building.Locked))
+			if (IsTraitDisabled || IsTraitPaused)
 				return false;
 
 			return devMode.FastBuild || progress == 0;

@@ -39,10 +39,6 @@ namespace OpenRA.Mods.AS.Traits
 			if (self.Owner.WinState == WinState.Lost || !self.World.Map.Contains(self.Location))
 				return;
 
-			foreach (var condition in self.TraitsImplementing<IPreventsEjectOnDeath>())
-				if (condition.PreventsEjectOnDeath(self))
-					return;
-
 			var r = self.World.SharedRandom.Next(1, 100);
 
 			if (r <= 100 - info.SuccessRate)

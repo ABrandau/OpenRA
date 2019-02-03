@@ -12,9 +12,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Linq;
 using OpenRA.Graphics;
-using OpenRA.Mods.Common;
 using OpenRA.Mods.Common.Graphics;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Mods.Common.Traits.Render;
@@ -51,18 +49,15 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 	{
 		readonly WithVoxelWalkerBodyInfo info;
 		readonly IMove movement;
-		readonly IFacing facing;
 		readonly ModelAnimation modelAnimation;
 		readonly RenderVoxels rv;
 
-		int oldFacing;
 		uint tick, frame, frames;
 
 		public WithVoxelWalkerBody(Actor self, WithVoxelWalkerBodyInfo info)
 		{
 			this.info = info;
 			movement = self.Trait<IMove>();
-			facing = self.Trait<IFacing>();
 
 			var body = self.Trait<BodyOrientation>();
 			rv = self.Trait<RenderVoxels>();
@@ -78,9 +73,8 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 
 		void ITick.Tick(Actor self)
 		{
-			if (movement.IsMoving || facing.Facing != oldFacing)
+			if (movement.IsMoving)
 				tick++;
-			oldFacing = facing.Facing;
 
 			if (tick < info.TickRate)
 				return;

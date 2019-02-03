@@ -11,6 +11,7 @@
 
 using System;
 using System.Drawing;
+using System.Linq;
 using OpenRA.Widgets;
 
 namespace OpenRA.Mods.Common.Widgets
@@ -39,6 +40,8 @@ namespace OpenRA.Mods.Common.Widgets
 		public bool Shadow = ChromeMetrics.Get<bool>("ButtonTextShadow");
 		public Color ContrastColorDark = ChromeMetrics.Get<Color>("ButtonTextContrastColorDark");
 		public Color ContrastColorLight = ChromeMetrics.Get<Color>("ButtonTextContrastColorLight");
+		public string ClickSound = ChromeMetrics.Get<string>("ClickSound");
+		public string ClickDisabledSound = ChromeMetrics.Get<string>("ClickDisabledSound");
 		public bool Disabled = false;
 		public bool Highlighted = false;
 		public Func<string> GetText;
@@ -143,10 +146,10 @@ namespace OpenRA.Mods.Common.Widgets
 			{
 				OnKeyPress(e);
 				if (!DisableKeySound)
-					Game.Sound.PlayNotification(ModRules, null, "Sounds", "ClickSound", null);
+					Game.Sound.PlayNotification(ModRules, null, "Sounds", ClickSound, null);
 			}
 			else if (!DisableKeySound)
-				Game.Sound.PlayNotification(ModRules, null, "Sounds", "ClickDisabledSound", null);
+				Game.Sound.PlayNotification(ModRules, null, "Sounds", ClickDisabledSound, null);
 
 			return true;
 		}
@@ -184,12 +187,12 @@ namespace OpenRA.Mods.Common.Widgets
 				{
 					OnMouseDown(mi);
 					Depressed = true;
-					Game.Sound.PlayNotification(ModRules, null, "Sounds", "ClickSound", null);
+					Game.Sound.PlayNotification(ModRules, null, "Sounds", ClickSound, null);
 				}
 				else
 				{
 					YieldMouseFocus(mi);
-					Game.Sound.PlayNotification(ModRules, null, "Sounds", "ClickDisabledSound", null);
+					Game.Sound.PlayNotification(ModRules, null, "Sounds", ClickDisabledSound, null);
 				}
 			}
 			else if (mi.Event == MouseInputEvent.Move && HasMouseFocus)
@@ -240,7 +243,8 @@ namespace OpenRA.Mods.Common.Widgets
 
 			var position = GetTextPosition(textSize, rb);
 
-			DrawBackground(rb, disabled, Depressed, Ui.MouseOverWidget == this, highlighted);
+			var hover = Ui.MouseOverWidget == this || Children.Any(c => c == Ui.MouseOverWidget);
+			DrawBackground(rb, disabled, Depressed, hover, highlighted);
 			if (Contrast)
 				font.DrawTextWithContrast(text, position + stateOffset,
 					disabled ? colordisabled : color, bgDark, bgLight, 2);

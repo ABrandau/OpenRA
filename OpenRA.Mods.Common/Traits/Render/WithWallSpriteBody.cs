@@ -33,6 +33,9 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 		public override IEnumerable<IActorPreview> RenderPreviewSprites(ActorPreviewInitializer init, RenderSpritesInfo rs, string image, int facings, PaletteReference p)
 		{
+			if (!EnabledByDefault)
+				yield break;
+
 			var adjacent = 0;
 
 			if (init.Contains<RuntimeNeighbourInit>())
@@ -136,8 +139,11 @@ namespace OpenRA.Mods.Common.Traits.Render
 			dirty = false;
 		}
 
-		protected override void OnBuildComplete(Actor self)
+		protected override void TraitEnabled(Actor self)
 		{
+			base.TraitEnabled(self);
+			dirty = true;
+
 			DefaultAnimation.PlayFetchIndex(NormalizeSequence(self, Info.Sequence), () => adjacent);
 			UpdateNeighbours(self);
 
@@ -159,8 +165,6 @@ namespace OpenRA.Mods.Common.Traits.Render
 		{
 			UpdateNeighbours(self);
 		}
-
-		protected override void TraitEnabled(Actor self) { dirty = true; }
 	}
 
 	public class RuntimeNeighbourInit : IActorInit<Dictionary<CPos, string[]>>, ISuppressInitExport

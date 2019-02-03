@@ -10,17 +10,18 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using OpenRA.GameRules;
 using OpenRA.Mods.AS.Activities;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Effects;
-using OpenRA.Mods.Common.Warheads;
+using OpenRA.Mods.Common.Traits;
 using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.AS.Warheads
 {
-	[Desc("Spawn actors upon explosion.")]
-	public class SpawnActorWarhead : WarheadAS
+	[Desc("Spawn actors upon explosion. Don't use this with buildings.")]
+	public class SpawnActorWarhead : WarheadAS, IRulesetLoaded<WeaponInfo>
 	{
 		[Desc("The cell range to try placing the actors within.")]
 		public readonly int Range = 10;
@@ -51,10 +52,22 @@ namespace OpenRA.Mods.AS.Warheads
 		[Desc("Defines the palette of an optional animation played at the spawning location.")]
 		public readonly string Palette = "effect";
 
-		[Desc("List of sounds that can be played at the sapwning location.")]
+		[Desc("List of sounds that can be played at the spawning location.")]
 		public readonly string[] Sounds = new string[0];
 
 		public readonly bool UsePlayerPalette = false;
+
+		public void RulesetLoaded(Ruleset rules, WeaponInfo info)
+		{
+			foreach (var a in Actors)
+			{
+				var actorInfo = rules.Actors[a.ToLowerInvariant()];
+				var buildingInfo = actorInfo.TraitInfoOrDefault<BuildingInfo>();
+
+				if (buildingInfo != null)
+					throw new YamlException("SpawnActorWarhead cannot be used to spawn building actor '{0}'!".F(a));
+			}
+		}
 
 		public override void DoImpact(Target target, Actor firedBy, IEnumerable<int> damageModifiers)
 		{
@@ -74,10 +87,52 @@ namespace OpenRA.Mods.AS.Warheads
 			{
 				var placed = false;
 				var td = new TypeDictionary();
+				var ai = map.Rules.Actors[a.ToLowerInvariant()];
+
 				if (Owner == null)
 					td.Add(new OwnerInit(firedBy.Owner));
 				else
 					td.Add(new OwnerInit(firedBy.World.Players.First(p => p.InternalName == Owner)));
+
+				// HACK HACK HACK
+				// Immobile does not offer a check directly if the actor can exist in a position.
+				// It also crashes the game if it's actor's created without a LocationInit.
+				// See AS/Engine#84.
+				if (ai.HasTraitInfo<ImmobileInfo>())
+				{
+					var immobileInfo = ai.TraitInfo<ImmobileInfo>();
+
+					while (cell.MoveNext())
+					{
+						if (!immobileInfo.OccupiesSpace || !firedBy.World.ActorMap.GetActorsAt(cell.Current).Any())
+						{
+							td.Add(new LocationInit(cell.Current));
+							var immobileunit = firedBy.World.CreateActor(false, a.ToLowerInvariant(), td);
+
+							firedBy.World.AddFrameEndTask(w =>
+							{
+								w.Add(immobileunit);
+
+								var palette = Palette;
+								if (UsePlayerPalette)
+									palette += immobileunit.Owner.InternalName;
+
+								var immobilespawnpos = firedBy.World.Map.CenterOfCell(cell.Current);
+
+								if (Image != null)
+									w.Add(new SpriteEffect(immobilespawnpos, w, Image, Sequence, palette));
+
+								var sound = Sounds.RandomOrDefault(Game.CosmeticRandom);
+								if (sound != null)
+									Game.Sound.Play(SoundType.World, sound, immobilespawnpos);
+							});
+
+							break;
+						}
+					}
+
+					return;
+				}
 
 				var unit = firedBy.World.CreateActor(false, a.ToLowerInvariant(), td);
 
@@ -103,7 +158,7 @@ namespace OpenRA.Mods.AS.Warheads
 								palette += unit.Owner.InternalName;
 
 							if (Image != null)
-								new SpriteEffect(pos, w, Image, Sequence, palette);
+								w.Add(new SpriteEffect(pos, w, Image, Sequence, palette));
 
 							var sound = Sounds.RandomOrDefault(Game.CosmeticRandom);
 							if (sound != null)

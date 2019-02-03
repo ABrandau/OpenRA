@@ -26,7 +26,7 @@ namespace OpenRA.Mods.AS.Traits
 	}
 
 	[Desc("Grants a condition when a selected event occurs.")]
-	public class GrantPeriodicConditionOnEventInfo : ConditionalTraitInfo
+	public class GrantPeriodicConditionOnEventInfo : PausableConditionalTraitInfo
 	{
 		[GrantedConditionReference, FieldLoader.Require]
 		[Desc("The condition to grant.")]
@@ -42,8 +42,6 @@ namespace OpenRA.Mods.AS.Traits
 
 		public readonly bool StartsCharged = false;
 
-		public readonly bool ResetTraitOnEnable = false;
-
 		public readonly bool ShowSelectionBar = false;
 		public readonly Color CooldownColor = Color.DarkRed;
 		public readonly Color ActiveColor = Color.DarkMagenta;
@@ -53,7 +51,8 @@ namespace OpenRA.Mods.AS.Traits
 
 	public enum PeriodicConditionState { Charging, Ready, Active }
 
-	public class GrantPeriodicConditionOnEvent : ConditionalTrait<GrantPeriodicConditionOnEventInfo>, INotifyCreated, ISelectionBar, ITick, ISync, INotifyDamage, INotifyAttack
+	public class GrantPeriodicConditionOnEvent : PausableConditionalTrait<GrantPeriodicConditionOnEventInfo>, INotifyCreated, ISelectionBar,
+		ITick, ISync, INotifyDamage, INotifyAttack
 	{
 		readonly Actor self;
 		readonly GrantPeriodicConditionOnEventInfo info;
@@ -61,7 +60,6 @@ namespace OpenRA.Mods.AS.Traits
 		ConditionManager manager;
 		[Sync] int ticks;
 		int cooldown, active;
-		bool isSuspended;
 		int token = ConditionManager.InvalidConditionToken;
 		WPos? lastPos;
 
@@ -108,7 +106,7 @@ namespace OpenRA.Mods.AS.Traits
 
 		void ITick.Tick(Actor self)
 		{
-			if (IsTraitDisabled)
+			if (IsTraitDisabled || IsTraitPaused)
 				return;
 
 			if (state != PeriodicConditionState.Ready && --ticks < 0)
@@ -143,12 +141,7 @@ namespace OpenRA.Mods.AS.Traits
 
 		protected override void TraitEnabled(Actor self)
 		{
-			if (info.ResetTraitOnEnable)
-				SetDefaultState();
-			else if (isSuspended)
-				TryEnableCondition();
-
-			isSuspended = false;
+			SetDefaultState();
 		}
 
 		protected override void TraitDisabled(Actor self)
@@ -156,9 +149,18 @@ namespace OpenRA.Mods.AS.Traits
 			if (IsEnabled)
 			{
 				DisableCondition();
-				isSuspended = true;
 				state = PeriodicConditionState.Ready;
 			}
+		}
+
+		protected override void TraitPaused(Actor self)
+		{
+			TraitDisabled(self);
+		}
+
+		protected override void TraitResumed(Actor self)
+		{
+			TryEnableCondition();
 		}
 
 		void TryEnableCondition()

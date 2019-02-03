@@ -16,7 +16,7 @@ using OpenRA.Traits;
 namespace OpenRA.Mods.AS.Traits
 {
 	[Desc("Grants a condition periodically.")]
-	public class GrantPeriodicConditionInfo : ConditionalTraitInfo
+	public class GrantPeriodicConditionInfo : PausableConditionalTraitInfo
 	{
 		[GrantedConditionReference, FieldLoader.Require]
 		[Desc("The condition to grant.")]
@@ -30,8 +30,6 @@ namespace OpenRA.Mods.AS.Traits
 
 		public readonly bool StartsGranted = false;
 
-		public readonly bool ResetTraitOnEnable = false;
-
 		public readonly bool ShowSelectionBar = false;
 		public readonly Color CooldownColor = Color.DarkRed;
 		public readonly Color ActiveColor = Color.DarkMagenta;
@@ -39,7 +37,7 @@ namespace OpenRA.Mods.AS.Traits
 		public override object Create(ActorInitializer init) { return new GrantPeriodicCondition(init, this); }
 	}
 
-	public class GrantPeriodicCondition : ConditionalTrait<GrantPeriodicConditionInfo>, INotifyCreated, ISelectionBar, ITick, ISync
+	public class GrantPeriodicCondition : PausableConditionalTrait<GrantPeriodicConditionInfo>, INotifyCreated, ISelectionBar, ITick, ISync
 	{
 		readonly Actor self;
 		readonly GrantPeriodicConditionInfo info;
@@ -79,6 +77,8 @@ namespace OpenRA.Mods.AS.Traits
 				if (info.StartsGranted != IsEnabled)
 					DisableCondition();
 			}
+
+			isSuspended = false;
 		}
 
 		void INotifyCreated.Created(Actor self)
@@ -91,7 +91,7 @@ namespace OpenRA.Mods.AS.Traits
 
 		void ITick.Tick(Actor self)
 		{
-			if (!IsTraitDisabled && --ticks < 0)
+			if (!IsTraitDisabled && !IsTraitPaused && --ticks < 0)
 			{
 				if (IsEnabled)
 				{
@@ -114,20 +114,30 @@ namespace OpenRA.Mods.AS.Traits
 
 		protected override void TraitEnabled(Actor self)
 		{
-			if (info.ResetTraitOnEnable)
-				SetDefaultState();
-			else if (isSuspended)
-				EnableCondition();
-
-			isSuspended = false;
+			SetDefaultState();
 		}
 
 		protected override void TraitDisabled(Actor self)
 		{
 			if (IsEnabled)
+				DisableCondition();
+		}
+
+		protected override void TraitPaused(Actor self)
+		{
+			if (IsEnabled)
 			{
 				DisableCondition();
 				isSuspended = true;
+			}
+		}
+
+		protected override void TraitResumed(Actor self)
+		{
+			if (isSuspended)
+			{
+				EnableCondition();
+				isSuspended = false;
 			}
 		}
 

@@ -58,10 +58,9 @@ namespace OpenRA.Mods.AS.Traits.Render
 		}
 	}
 
-	public class WithIdleOverlayOnGround : PausableConditionalTrait<WithIdleOverlayOnGroundInfo>, INotifyDamageStateChanged, INotifyBuildComplete, INotifySold, INotifyTransform
+	public class WithIdleOverlayOnGround : PausableConditionalTrait<WithIdleOverlayOnGroundInfo>, INotifyDamageStateChanged
 	{
 		readonly Animation overlay;
-		bool buildComplete;
 
 		public WithIdleOverlayOnGround(Actor self, WithIdleOverlayOnGroundInfo info)
 			: base(info)
@@ -71,8 +70,7 @@ namespace OpenRA.Mods.AS.Traits.Render
 
 			var image = !string.IsNullOrEmpty(info.Image) ? info.Image : rs.GetImage(self);
 
-			buildComplete = !self.Info.HasTraitInfo<BuildingInfo>(); // always render instantly for units
-			overlay = new Animation(self.World, image, () => IsTraitPaused || !buildComplete);
+			overlay = new Animation(self.World, image, () => IsTraitPaused);
 			if (info.StartSequence != null)
 				overlay.PlayThen(RenderSprites.NormalizeSequence(overlay, self.GetDamageState(), info.StartSequence),
 					() => overlay.PlayRepeating(RenderSprites.NormalizeSequence(overlay, self.GetDamageState(), info.Sequence)));
@@ -82,30 +80,11 @@ namespace OpenRA.Mods.AS.Traits.Render
 			var anim = new AnimationWithOffset(overlay,
 				() => body.LocalToWorld(info.Offset.Rotate(body.QuantizeOrientation(self, self.Orientation)))
 					- new WVec(WDist.Zero, WDist.Zero, self.World.Map.DistanceAboveTerrain(self.CenterPosition)),
-				() => IsTraitDisabled || !buildComplete,
+				() => IsTraitDisabled,
 				p => RenderUtils.ZOffsetFromCenter(self, p, 1));
 
 			rs.Add(anim, info.Palette, info.IsPlayerPalette);
 		}
-
-		public void BuildingComplete(Actor self)
-		{
-			buildComplete = true;
-		}
-
-		public void Sold(Actor self) { }
-		public void Selling(Actor self)
-		{
-			buildComplete = false;
-		}
-
-		public void BeforeTransform(Actor self)
-		{
-			buildComplete = false;
-		}
-
-		public void OnTransform(Actor self) { }
-		public void AfterTransform(Actor self) { }
 
 		public void DamageStateChanged(Actor self, AttackInfo e)
 		{

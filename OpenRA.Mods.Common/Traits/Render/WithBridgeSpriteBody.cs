@@ -44,6 +44,9 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 		public override IEnumerable<IActorPreview> RenderPreviewSprites(ActorPreviewInitializer init, RenderSpritesInfo rs, string image, int facings, PaletteReference p)
 		{
+			if (!EnabledByDefault)
+				yield break;
+
 			var anim = new Animation(init.World, image);
 			anim.PlayFetchIndex(RenderSprites.NormalizeSequence(anim, init.GetDamageState(), Sequences.First()), () => 0);
 
@@ -65,8 +68,10 @@ namespace OpenRA.Mods.Common.Traits.Render
 			bridgeLayer = init.World.WorldActor.Trait<BridgeLayer>();
 		}
 
-		protected override void OnBuildComplete(Actor self)
+		protected override void TraitEnabled(Actor self)
 		{
+			base.TraitEnabled(self);
+
 			if (bridgeInfo.AOffset != CVec.Zero)
 				UpdateNeighbour(bridgeInfo.AOffset);
 
