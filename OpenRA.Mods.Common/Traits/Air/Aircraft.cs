@@ -213,7 +213,7 @@ namespace OpenRA.Mods.Common.Traits
 		public WPos CenterPosition { get; private set; }
 
 		public CPos TopLeft { get { return self.World.Map.CellContaining(CenterPosition); } }
-		public int TurnSpeed { get { return Info.TurnSpeed; } }
+		public int TurnSpeed { get { return !IsTraitDisabled && !IsTraitPaused ? Info.TurnSpeed : 0; } }
 		public Actor ReservedActor { get; private set; }
 		public bool MayYieldReservation { get; private set; }
 		public bool ForceLanding { get; private set; }
@@ -548,7 +548,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public int MovementSpeed
 		{
-			get { return Util.ApplyPercentageModifiers(Info.Speed, speedModifiers); }
+			get { return !IsTraitDisabled && !IsTraitPaused ? Util.ApplyPercentageModifiers(Info.Speed, speedModifiers) : 0; }
 		}
 
 		public Pair<CPos, SubCell>[] OccupiedCells()
@@ -957,7 +957,8 @@ namespace OpenRA.Mods.Common.Traits
 
 		public Order IssueOrder(Actor self, IOrderTargeter order, Target target, bool queued)
 		{
-			if (order.OrderID == "Enter" || order.OrderID == "Move" || order.OrderID == "Land" || order.OrderID == "ForceEnter")
+			if (!IsTraitDisabled &&
+				(order.OrderID == "Enter" || order.OrderID == "Move" || order.OrderID == "Land" || order.OrderID == "ForceEnter"))
 				return new Order(order.OrderID, self, target, queued);
 
 			return null;
@@ -970,7 +971,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		Order IIssueDeployOrder.IssueDeployOrder(Actor self, bool queued)
 		{
-			if (rearmable == null || !rearmable.Info.RearmActors.Any())
+			if (IsTraitDisabled || rearmable == null || !rearmable.Info.RearmActors.Any())
 				return null;
 
 			return new Order("ReturnToBase", self, queued);
@@ -980,6 +981,9 @@ namespace OpenRA.Mods.Common.Traits
 
 		public string VoicePhraseForOrder(Actor self, Order order)
 		{
+			if (IsTraitDisabled)
+				return null;
+
 			switch (order.OrderString)
 			{
 				case "Land":
@@ -1005,6 +1009,9 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void ResolveOrder(Actor self, Order order)
 		{
+			if (IsTraitDisabled)
+				return;
+
 			var orderString = order.OrderString;
 			if (orderString == "Move")
 			{
@@ -1094,6 +1101,9 @@ namespace OpenRA.Mods.Common.Traits
 
 		void Nudge(Actor self)
 		{
+			if (IsTraitDisabled || IsTraitPaused || requireForceMove)
+				return;
+
 			// Disable nudging if the aircraft is outside the map
 			if (!self.World.Map.Contains(self.Location))
 				return;
@@ -1213,15 +1223,12 @@ namespace OpenRA.Mods.Common.Traits
 						OrderID = "Land";
 				}
 
-				var explored = self.Owner.Shroud.IsExplored(location);
-				cursor = self.World.Map.Contains(location) ?
-					(self.World.Map.GetTerrainInfo(location).CustomCursor ?? "move") :
-					"move-blocked";
-
 				IsQueued = modifiers.HasModifier(TargetModifiers.ForceQueue);
 
-				if (!explored && !aircraft.Info.MoveIntoShroud)
-					cursor = "move-blocked";
+				var explored = self.Owner.Shroud.IsExplored(location);
+				cursor = !aircraft.IsTraitPaused && (explored || aircraft.Info.MoveIntoShroud) && self.World.Map.Contains(location) ?
+					(self.World.Map.GetTerrainInfo(location).CustomCursor ?? "move") :
+					"move-blocked";
 
 				return true;
 			}
