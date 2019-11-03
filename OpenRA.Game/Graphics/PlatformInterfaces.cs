@@ -114,6 +114,8 @@ namespace OpenRA
 	{
 		void Bind();
 		void Unbind();
+		void EnableScissor(Rectangle rect);
+		void DisableScissor();
 		ITexture Texture { get; }
 	}
 
