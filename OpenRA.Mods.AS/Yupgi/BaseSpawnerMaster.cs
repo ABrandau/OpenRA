@@ -46,7 +46,6 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 		public readonly int InitialActorCount = -1;
 
 		[Desc("The armament which will trigger the slaves to attack the target. (== \"Name:\" tag of Armament, not @tag!)")]
-		[WeaponReference]
 		public readonly string SpawnerArmamentName = "primary";
 
 		[Desc("What happens to the slaves when the master is killed?")]
@@ -94,7 +93,8 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 		ExitInfo[] exits;
 		RallyPoint rallyPoint;
 
-		public BaseSpawnerMaster(ActorInitializer init, BaseSpawnerMasterInfo info) : base(info)
+		public BaseSpawnerMaster(ActorInitializer init, BaseSpawnerMasterInfo info)
+			: base(info)
 		{
 			self = init.Self;
 
