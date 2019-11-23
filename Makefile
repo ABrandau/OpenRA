@@ -146,8 +146,6 @@ test: core
 	@echo "Testing Red Alert mod MiniYAML..."
 	@mono --debug OpenRA.Utility.exe ra --check-yaml
 
-<<<<<<< HEAD
-
 ##### Launchers / Utilities #####
 
 utility_SRCS := $(shell find OpenRA.Utility/ -iname '*.cs')
