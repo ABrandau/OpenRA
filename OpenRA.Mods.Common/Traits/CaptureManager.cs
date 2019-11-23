@@ -55,7 +55,7 @@ namespace OpenRA.Mods.Common.Traits
 		}
 	}
 
-	public class CaptureManager : INotifyCreated, INotifyCapture, ITick, IPreventsAutoTarget
+	public class CaptureManager : INotifyCreated, INotifyCapture, ITick, IDisableEnemyAutoTarget
 	{
 		readonly CaptureManagerInfo info;
 		ConditionManager conditionManager;
@@ -189,6 +189,10 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			captures = null;
 
+			// Prevent a capture being restarted after it has been canceled during disposal
+			if (self.WillDispose)
+				return false;
+
 			if (target != currentTarget)
 			{
 				if (currentTarget != null)
@@ -215,6 +219,11 @@ namespace OpenRA.Mods.Common.Traits
 				.FirstOrDefault(c => targetManager.CanBeTargetedBy(target, self, c));
 
 			if (captures == null)
+				return false;
+
+			// HACK: Make sure the target is not moving and at its normal position with respect to the cell grid
+			var enterMobile = target.TraitOrDefault<Mobile>();
+			if (enterMobile != null && enterMobile.IsMovingBetweenCells)
 				return false;
 
 			if (progressWatchers.Any() || targetManager.progressWatchers.Any())
@@ -283,7 +292,7 @@ namespace OpenRA.Mods.Common.Traits
 				w.Update(currentTarget, self, currentTarget, currentTargetDelay, currentTargetTotal);
 		}
 
-		bool IPreventsAutoTarget.PreventsAutoTarget(Actor self, Actor attacker)
+		bool IDisableEnemyAutoTarget.DisableEnemyAutoTarget(Actor self, Actor attacker)
 		{
 			return info.PreventsAutoTarget && currentCaptors.Any(c => attacker.AppearsFriendlyTo(c));
 		}

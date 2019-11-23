@@ -23,8 +23,11 @@ namespace OpenRA.Mods.Common.Widgets
 {
 	public class SupportPowersWidget : Widget
 	{
-		[Translate] public readonly string ReadyText = "";
-		[Translate] public readonly string HoldText = "";
+		[Translate]
+		public readonly string ReadyText = "";
+
+		[Translate]
+		public readonly string HoldText = "";
 
 		public readonly int2 IconSize = new int2(64, 48);
 		public readonly int IconMargin = 10;
@@ -55,6 +58,7 @@ namespace OpenRA.Mods.Common.Widgets
 		Dictionary<Rectangle, SupportPowerIcon> icons = new Dictionary<Rectangle, SupportPowerIcon>();
 
 		public SupportPowerIcon TooltipIcon { get; private set; }
+		public Func<SupportPowerIcon> GetTooltipIcon;
 		Lazy<TooltipContainerWidget> tooltipContainer;
 		HotkeyReference[] hotkeys;
 
@@ -90,6 +94,7 @@ namespace OpenRA.Mods.Common.Widgets
 		{
 			this.modData = modData;
 			this.worldRenderer = worldRenderer;
+			GetTooltipIcon = () => TooltipIcon;
 			spm = world.LocalPlayer.PlayerActor.Trait<SupportPowerManager>();
 			tooltipContainer = Exts.Lazy(() =>
 				Ui.Root.Get<TooltipContainerWidget>(TooltipContainer));
@@ -119,7 +124,8 @@ namespace OpenRA.Mods.Common.Widgets
 		public void RefreshIcons()
 		{
 			icons = new Dictionary<Rectangle, SupportPowerIcon>();
-			var powers = spm.Powers.Values.Where(p => !p.Disabled);
+			var powers = spm.Powers.Values.Where(p => !p.Disabled)
+				.OrderBy(p => p.Info.SupportPowerPaletteOrder);
 
 			var oldIconCount = IconCount;
 			IconCount = 0;
@@ -149,7 +155,7 @@ namespace OpenRA.Mods.Common.Widgets
 				IconCount++;
 			}
 
-			eventBounds = icons.Any() ? icons.Keys.Aggregate(Rectangle.Union) : Rectangle.Empty;
+			eventBounds = icons.Keys.Union();
 
 			if (oldIconCount != IconCount)
 				OnIconCountChanged(oldIconCount, IconCount);
@@ -200,8 +206,8 @@ namespace OpenRA.Mods.Common.Widgets
 				// Charge progress
 				var sp = p.Power;
 				clock.PlayFetchIndex(ClockSequence,
-					() => sp.TotalTime == 0 ? clock.CurrentSequence.Length - 1 : (sp.TotalTime - sp.RemainingTime)
-					* (clock.CurrentSequence.Length - 1) / sp.TotalTime);
+					() => sp.TotalTicks == 0 ? clock.CurrentSequence.Length - 1 : (sp.TotalTicks - sp.RemainingTicks)
+					* (clock.CurrentSequence.Length - 1) / sp.TotalTicks);
 
 				clock.Tick();
 				WidgetUtils.DrawSHPCentered(clock.Image, p.Pos + iconOffset, p.IconClockPalette);
@@ -210,7 +216,15 @@ namespace OpenRA.Mods.Common.Widgets
 			// Overlay
 			foreach (var p in icons.Values)
 			{
-				if (p.Power.Ready)
+				var customText = p.Power.IconOverlayTextOverride();
+				if (customText != null)
+				{
+					var customOffset = iconOffset - overlayFont.Measure(customText) / 2;
+					overlayFont.DrawTextWithContrast(customText,
+						p.Pos + customOffset,
+						Color.White, Color.Black, 1);
+				}
+				else if (p.Power.Ready)
 					overlayFont.DrawTextWithContrast(ReadyText,
 						p.Pos + readyOffset,
 						Color.White, Color.Black, 1);
@@ -219,7 +233,7 @@ namespace OpenRA.Mods.Common.Widgets
 						p.Pos + holdOffset,
 						Color.White, Color.Black, 1);
 				else
-					overlayFont.DrawTextWithContrast(WidgetUtils.FormatTime(p.Power.RemainingTime, worldRenderer.World.Timestep),
+					overlayFont.DrawTextWithContrast(WidgetUtils.FormatTime(p.Power.RemainingTicks, worldRenderer.World.Timestep),
 						p.Pos + timeOffset,
 						Color.White, Color.Black, 1);
 			}
@@ -237,8 +251,11 @@ namespace OpenRA.Mods.Common.Widgets
 				return;
 
 			tooltipContainer.Value.SetTooltip(TooltipTemplate,
-				new WidgetArgs() { { "world", worldRenderer.World }, { "player", spm.Self.Owner }, { "palette", this },
-				{ "playerResources", worldRenderer.World.LocalPlayer.PlayerActor.Trait<PlayerResources>() } });
+				new WidgetArgs()
+				{
+					{ "world", worldRenderer.World }, { "player", spm.Self.Owner }, { "getTooltipIcon", GetTooltipIcon },
+					{ "playerResources", worldRenderer.World.LocalPlayer.PlayerActor.Trait<PlayerResources>() }
+				});
 		}
 
 		public override void MouseExited()

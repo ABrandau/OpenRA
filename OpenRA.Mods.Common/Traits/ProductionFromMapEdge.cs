@@ -93,8 +93,6 @@ namespace OpenRA.Mods.Common.Traits
 				if (move != null)
 					newUnit.QueueActivity(move.MoveTo(destination, 2));
 
-				newUnit.SetTargetLine(Target.FromCell(self.World, destination), Color.Green, false);
-
 				if (!self.IsDead)
 					foreach (var t in self.TraitsImplementing<INotifyProduction>())
 						t.UnitProduced(self, newUnit, destination);
@@ -110,7 +108,9 @@ namespace OpenRA.Mods.Common.Traits
 
 	public class ProductionSpawnLocationInit : IActorInit<CPos>
 	{
-		[FieldFromYamlKey] readonly CPos value = CPos.Zero;
+		[FieldFromYamlKey]
+		readonly CPos value = CPos.Zero;
+
 		public ProductionSpawnLocationInit() { }
 		public ProductionSpawnLocationInit(CPos init) { value = init; }
 		public CPos Value(World world) { return value; }

@@ -20,10 +20,10 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 	public class SupportPowerTooltipLogic : ChromeLogic
 	{
 		[ObjectCreator.UseCtor]
-		public SupportPowerTooltipLogic(Widget widget, TooltipContainerWidget tooltipContainer, Player player, SupportPowersWidget palette, World world,
+		public SupportPowerTooltipLogic(Widget widget, TooltipContainerWidget tooltipContainer, Func<SupportPowersWidget.SupportPowerIcon> getTooltipIcon, World world,
 			PlayerResources playerResources)
 		{
-			widget.IsVisible = () => palette.TooltipIcon != null && palette.TooltipIcon.Power.Info != null;
+			widget.IsVisible = () => getTooltipIcon() != null && getTooltipIcon().Power.Info != null;
 			var nameLabel = widget.Get<LabelWidget>("NAME");
 			var hotkeyLabel = widget.Get<LabelWidget>("HOTKEY");
 			var timeLabel = widget.Get<LabelWidget>("TIME");
@@ -44,7 +44,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 			tooltipContainer.BeforeRender = () =>
 			{
-				var icon = palette.TooltipIcon;
+				var icon = getTooltipIcon();
 				if (icon == null || icon.Power == null || icon.Power.Instances.Count == 0)
 					return;
 
@@ -52,7 +52,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 				// HACK: This abuses knowledge of the internals of WidgetUtils.FormatTime
 				// to efficiently work when the label is going to change, requiring a panel relayout
-				var remainingSeconds = (int)Math.Ceiling(sp.RemainingTime * world.Timestep / 1000f);
+				var remainingSeconds = (int)Math.Ceiling(sp.RemainingTicks * world.Timestep / 1000f);
 
 				var hotkey = icon.Hotkey != null ? icon.Hotkey.GetValue() : Hotkey.Invalid;
 				if (sp == lastPower && hotkey == lastHotkey && lastRemainingSeconds == remainingSeconds)
@@ -71,11 +71,17 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				descLabel.Text = sp.Info.LongDesc.Replace("\\n", "\n");
 				var descSize = descFont.Measure(descLabel.Text);
 
-				var remaining = WidgetUtils.FormatTime(sp.RemainingTime, world.Timestep);
-				var total = WidgetUtils.FormatTime(sp.Info.ChargeInterval, world.Timestep);
-				timeLabel.Text = "{0} / {1}".F(remaining, total);
-				var timeSize = timeFont.Measure(timeLabel.Text);
+				var customLabel = sp.TooltipTimeTextOverride();
+				if (customLabel == null)
+				{
+					var remaining = WidgetUtils.FormatTime(sp.RemainingTicks, world.Timestep);
+					var total = WidgetUtils.FormatTime(sp.Info.ChargeInterval, world.Timestep);
+					timeLabel.Text = "{0} / {1}".F(remaining, total);
+				}
+				else
+					timeLabel.Text = customLabel;
 
+				var timeSize = timeFont.Measure(timeLabel.Text);
 				var hotkeyWidth = 0;
 				hotkeyLabel.Visible = hotkey.IsValid();
 				if (hotkeyLabel.Visible)
@@ -111,7 +117,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				lastRemainingSeconds = remainingSeconds;
 			};
 
-			timeLabel.GetColor = () => palette.TooltipIcon != null && !palette.TooltipIcon.Power.Active
+			timeLabel.GetColor = () => getTooltipIcon() != null && !getTooltipIcon().Power.Active
 				? Color.Red : Color.White;
 		}
 	}

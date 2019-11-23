@@ -87,7 +87,7 @@ namespace OpenRA.Mods.Common.Widgets
 
 			var scaledHeight = (int)videoSize.Y;
 			overlay = new uint[Exts.NextPowerOf2(scaledHeight), 1];
-			var black = (uint)255 << 24;
+			var black = 255U << 24;
 			for (var y = 0; y < scaledHeight; y += 2)
 				overlay[y, 0] = black;
 
@@ -104,7 +104,7 @@ namespace OpenRA.Mods.Common.Widgets
 			if (!stopped && !paused)
 			{
 				var nextFrame = 0;
-				if (video.HasAudio)
+				if (video.HasAudio && !Game.Sound.DummyEngine)
 					nextFrame = (int)float2.Lerp(0, video.Frames, Game.Sound.VideoSeekPosition * invLength);
 				else
 					nextFrame = video.CurrentFrame + 1;

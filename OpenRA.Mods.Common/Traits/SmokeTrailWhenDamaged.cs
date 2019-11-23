@@ -18,10 +18,16 @@ namespace OpenRA.Mods.Common.Traits
 	{
 		[Desc("Position relative to body")]
 		public readonly WVec Offset = WVec.Zero;
+
 		public readonly int Interval = 3;
+
 		public readonly string Sprite = "smokey";
-		[SequenceReference("Sprite")] public readonly string Sequence = "idle";
+
+		[SequenceReference("Sprite")]
+		public readonly string Sequence = "idle";
+
 		public readonly string Palette = "effect";
+
 		public readonly DamageState MinDamage = DamageState.Heavy;
 
 		public object Create(ActorInitializer init) { return new SmokeTrailWhenDamaged(init.Self, this); }
@@ -55,7 +61,7 @@ namespace OpenRA.Mods.Common.Traits
 				{
 					var offset = info.Offset.Rotate(body.QuantizeOrientation(self, self.Orientation));
 					var pos = position + body.LocalToWorld(offset);
-					self.World.AddFrameEndTask(w => w.Add(new SpriteEffect(pos, w, info.Sprite, info.Sequence, info.Palette, false, false, getFacing)));
+					self.World.AddFrameEndTask(w => w.Add(new SpriteEffect(pos, w, info.Sprite, info.Sequence, info.Palette, facing: getFacing)));
 				}
 
 				ticks = info.Interval;

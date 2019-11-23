@@ -47,12 +47,9 @@ namespace OpenRA.Mods.Cnc.Traits
 		bool IOccupySpaceInfo.SharesCell { get { return false; } }
 
 		// Used to determine if actor can spawn
-		public bool CanEnterCell(World world, Actor self, CPos cell, Actor ignoreActor = null, bool checkTransientActors = false)
+		public bool CanEnterCell(World world, Actor self, CPos cell, SubCell subCell = SubCell.FullCell, Actor ignoreActor = null, BlockedByActor check = BlockedByActor.All)
 		{
-			if (!world.Map.Contains(cell))
-				return false;
-
-			return true;
+			return world.Map.Contains(cell);
 		}
 	}
 
@@ -64,8 +61,12 @@ namespace OpenRA.Mods.Cnc.Traits
 
 		IEnumerable<int> speedModifiers;
 
-		[Sync] public int Facing { get; set; }
-		[Sync] public WPos CenterPosition { get; private set; }
+		[Sync]
+		public int Facing { get; set; }
+
+		[Sync]
+		public WPos CenterPosition { get; private set; }
+
 		public CPos TopLeft { get { return self.World.Map.CellContaining(CenterPosition); } }
 
 		// Isn't used anyway
@@ -154,9 +155,9 @@ namespace OpenRA.Mods.Cnc.Traits
 
 		public bool CanExistInCell(CPos cell) { return true; }
 		public bool IsLeavingCell(CPos location, SubCell subCell = SubCell.Any) { return false; }
-		public bool CanEnterCell(CPos cell, Actor ignoreActor = null, bool checkTransientActors = false) { return true; }
+		public bool CanEnterCell(CPos cell, Actor ignoreActor = null, BlockedByActor check = BlockedByActor.All) { return true; }
 		public SubCell GetValidSubCell(SubCell preferred) { return SubCell.Invalid; }
-		public SubCell GetAvailableSubCell(CPos a, SubCell preferredSubCell = SubCell.Any, Actor ignoreActor = null, bool checkTransientActors = true)
+		public SubCell GetAvailableSubCell(CPos a, SubCell preferredSubCell = SubCell.Any, Actor ignoreActor = null, BlockedByActor check = BlockedByActor.All)
 		{
 			// Does not use any subcell
 			return SubCell.Invalid;
@@ -179,15 +180,15 @@ namespace OpenRA.Mods.Cnc.Traits
 			self.World.UpdateMaps(self, this);
 		}
 
-		public Activity MoveTo(CPos cell, int nearEnough) { return null; }
-		public Activity MoveTo(CPos cell, Actor ignoreActor) { return null; }
+		public Activity MoveTo(CPos cell, int nearEnough, Color? targetLineColor = null) { return null; }
+		public Activity MoveTo(CPos cell, Actor ignoreActor, Color? targetLineColor = null) { return null; }
 		public Activity MoveWithinRange(Target target, WDist range,
 			WPos? initialTargetPosition = null, Color? targetLineColor = null) { return null; }
 		public Activity MoveWithinRange(Target target, WDist minRange, WDist maxRange,
 			WPos? initialTargetPosition = null, Color? targetLineColor = null) { return null; }
 		public Activity MoveFollow(Actor self, Target target, WDist minRange, WDist maxRange,
 			WPos? initialTargetPosition = null, Color? targetLineColor = null) { return null; }
-		public Activity MoveIntoWorld(Actor self, CPos cell, SubCell subCell = SubCell.Any) { return null; }
+		public Activity ReturnToCell(Actor self) { return null; }
 		public Activity MoveToTarget(Actor self, Target target,
 			WPos? initialTargetPosition = null, Color? targetLineColor = null) { return null; }
 		public Activity MoveIntoTarget(Actor self, Target target) { return null; }
@@ -201,9 +202,7 @@ namespace OpenRA.Mods.Cnc.Traits
 		public CPos NearestMoveableCell(CPos cell) { return cell; }
 
 		// Actors with TDGunboat always move
-		public bool IsMoving { get { return true; } set { } }
-
-		public bool IsMovingVertically { get { return false; } set { } }
+		public MovementType CurrentMovementTypes { get { return MovementType.Horizontal; } set { } }
 
 		public bool CanEnterTargetNow(Actor self, Target target)
 		{

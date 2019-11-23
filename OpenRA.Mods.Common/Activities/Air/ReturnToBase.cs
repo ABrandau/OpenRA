@@ -25,16 +25,13 @@ namespace OpenRA.Mods.Common.Activities
 		readonly RepairableInfo repairableInfo;
 		readonly Rearmable rearmable;
 		readonly bool alwaysLand;
-		readonly bool abortOnResupply;
-		bool isCalculated;
 		Actor dest;
-		WPos w1, w2, w3;
+		int facing = -1;
 
-		public ReturnToBase(Actor self, bool abortOnResupply, Actor dest = null, bool alwaysLand = true)
+		public ReturnToBase(Actor self, Actor dest = null, bool alwaysLand = false)
 		{
 			this.dest = dest;
 			this.alwaysLand = alwaysLand;
-			this.abortOnResupply = abortOnResupply;
 			aircraft = self.Trait<Aircraft>();
 			repairableInfo = self.Info.TraitInfoOrDefault<RepairableInfo>();
 			rearmable = self.TraitOrDefault<Rearmable>();
@@ -47,62 +44,11 @@ namespace OpenRA.Mods.Common.Activities
 				return null;
 
 			return self.World.ActorsHavingTrait<Reservable>()
-				.Where(a => a.Owner == self.Owner
+				.Where(a => !a.IsDead
+					&& a.Owner == self.Owner
 					&& rearmInfo.RearmActors.Contains(a.Info.Name)
 					&& (!unreservedOnly || Reservable.IsAvailableFor(a, self)))
 				.ClosestTo(self);
-		}
-
-		void Calculate(Actor self)
-		{
-			if (dest == null || dest.IsDead || !Reservable.IsAvailableFor(dest, self))
-				dest = ChooseResupplier(self, true);
-
-			if (dest == null)
-				return;
-
-			var landPos = dest.CenterPosition;
-			var altitude = aircraft.Info.CruiseAltitude.Length;
-
-			// Distance required for descent.
-			var landDistance = altitude * 1024 / aircraft.Info.MaximumPitch.Tan();
-
-			// Land towards the east
-			var approachStart = landPos + new WVec(-landDistance, 0, altitude);
-
-			// Add 10% to the turning radius to ensure we have enough room
-			var speed = aircraft.MovementSpeed * 32 / 35;
-			var turnRadius = Fly.CalculateTurnRadius(speed, aircraft.Info.TurnSpeed);
-
-			// Find the center of the turning circles for clockwise and counterclockwise turns
-			var angle = WAngle.FromFacing(aircraft.Facing);
-			var fwd = -new WVec(angle.Sin(), angle.Cos(), 0);
-
-			// Work out whether we should turn clockwise or counter-clockwise for approach
-			var side = new WVec(-fwd.Y, fwd.X, fwd.Z);
-			var approachDelta = self.CenterPosition - approachStart;
-			var sideTowardBase = new[] { side, -side }
-				.MinBy(a => WVec.Dot(a, approachDelta));
-
-			// Calculate the tangent line that joins the turning circles at the current and approach positions
-			var cp = self.CenterPosition + turnRadius * sideTowardBase / 1024;
-			var posCenter = new WPos(cp.X, cp.Y, altitude);
-			var approachCenter = approachStart + new WVec(0, turnRadius * Math.Sign(self.CenterPosition.Y - approachStart.Y), 0);
-			var tangentDirection = approachCenter - posCenter;
-			var tangentLength = tangentDirection.Length;
-			var tangentOffset = WVec.Zero;
-			if (tangentLength != 0)
-				tangentOffset = new WVec(-tangentDirection.Y, tangentDirection.X, 0) * turnRadius / tangentLength;
-
-			// TODO: correctly handle CCW <-> CW turns
-			if (tangentOffset.X > 0)
-				tangentOffset = -tangentOffset;
-
-			w1 = posCenter + tangentOffset;
-			w2 = approachCenter + tangentOffset;
-			w3 = approachStart;
-
-			isCalculated = true;
 		}
 
 		bool ShouldLandAtBuilding(Actor self, Actor dest)
@@ -114,61 +60,79 @@ namespace OpenRA.Mods.Common.Activities
 				return true;
 
 			return rearmable != null && rearmable.Info.RearmActors.Contains(dest.Info.Name)
-					&& rearmable.RearmableAmmoPools.Any(p => !p.FullAmmo());
+					&& rearmable.RearmableAmmoPools.Any(p => !p.HasFullAmmo);
 		}
 
-		public override Activity Tick(Actor self)
+		public override bool Tick(Actor self)
 		{
 			// Refuse to take off if it would land immediately again.
 			// Special case: Don't kill other deploy hotkey activities.
 			if (aircraft.ForceLanding)
-				return NextActivity;
+				return true;
 
 			if (IsCanceling || self.IsDead)
-				return NextActivity;
+				return true;
 
-			if (!isCalculated)
-				Calculate(self);
+			if (dest == null || dest.IsDead || !Reservable.IsAvailableFor(dest, self))
+				dest = ChooseResupplier(self, true);
 
-			if (dest == null || dest.IsDead)
+			if (dest == null)
 			{
 				var nearestResupplier = ChooseResupplier(self, false);
 
 				if (nearestResupplier != null)
-					return ActivityUtils.SequenceActivities(self,
-						new Fly(self, Target.FromActor(nearestResupplier), WDist.Zero, aircraft.Info.WaitDistanceFromResupplyBase, targetLineColor: Color.Green),
-						new FlyCircle(self, aircraft.Info.NumberOfTicksToVerifyAvailableAirport),
-						this);
-				else
 				{
-					// Prevent an infinite loop in case we'd return to the activity that called ReturnToBase in the first place. Go idle instead.
-					Cancel(self);
-					return NextActivity;
+					if (aircraft.Info.CanHover)
+					{
+						var distanceFromResupplier = (nearestResupplier.CenterPosition - self.CenterPosition).HorizontalLength;
+						var distanceLength = aircraft.Info.WaitDistanceFromResupplyBase.Length;
+
+						// If no pad is available, move near one and wait
+						if (distanceFromResupplier > distanceLength)
+						{
+							var randomPosition = WVec.FromPDF(self.World.SharedRandom, 2) * distanceLength / 1024;
+							var target = Target.FromPos(nearestResupplier.CenterPosition + randomPosition);
+
+							QueueChild(new Fly(self, target, WDist.Zero, aircraft.Info.WaitDistanceFromResupplyBase, targetLineColor: Color.Green));
+						}
+
+						return false;
+					}
+
+					QueueChild(new Fly(self, Target.FromActor(nearestResupplier), WDist.Zero, aircraft.Info.WaitDistanceFromResupplyBase, targetLineColor: Color.Green));
+					QueueChild(new FlyIdle(self, aircraft.Info.NumberOfTicksToVerifyAvailableAirport));
+					return false;
 				}
+
+				// Prevent an infinite loop in case we'd return to the activity that called ReturnToBase in the first place. Go idle instead.
+				self.CancelActivity();
+				return true;
 			}
-
-			List<Activity> landingProcedures = new List<Activity>();
-
-			var turnRadius = Fly.CalculateTurnRadius(aircraft.Info.Speed, aircraft.Info.TurnSpeed);
-
-			landingProcedures.Add(new Fly(self, Target.FromPos(w1), WDist.Zero, new WDist(turnRadius * 3)));
-			landingProcedures.Add(new Fly(self, Target.FromPos(w2)));
-
-			// Fix a problem when the airplane is send to resupply near the airport
-			landingProcedures.Add(new Fly(self, Target.FromPos(w3), WDist.Zero, new WDist(turnRadius / 2)));
 
 			if (ShouldLandAtBuilding(self, dest))
 			{
-				aircraft.MakeReservation(dest);
+				var exit = dest.FirstExitOrDefault(null);
+				var offset = exit != null ? exit.Info.SpawnOffset : WVec.Zero;
+				if (aircraft.Info.TurnToDock || !aircraft.Info.VTOL)
+					facing = aircraft.Info.InitialFacing;
 
-				landingProcedures.Add(new Land(self, Target.FromActor(dest)));
-				landingProcedures.Add(new ResupplyAircraft(self));
+				aircraft.MakeReservation(dest);
+				QueueChild(new Land(self, Target.FromActor(dest), offset, facing, Color.Green));
+				QueueChild(new Resupply(self, dest, WDist.Zero, alwaysLand));
+				return true;
 			}
 
-			if (!abortOnResupply)
-				landingProcedures.Add(NextActivity);
+			QueueChild(new Fly(self, Target.FromActor(dest), targetLineColor: Color.Green));
+			return true;
+		}
 
-			return ActivityUtils.SequenceActivities(self, landingProcedures.ToArray());
+		public override IEnumerable<TargetLineNode> TargetLineNodes(Actor self)
+		{
+			if (ChildActivity == null)
+				yield return new TargetLineNode(Target.FromActor(dest), Color.Green);
+			else
+				foreach (var n in ChildActivity.TargetLineNodes(self))
+					yield return n;
 		}
 	}
 }

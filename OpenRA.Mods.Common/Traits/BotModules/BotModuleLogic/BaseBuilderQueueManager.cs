@@ -134,7 +134,9 @@ namespace OpenRA.Mods.Common.Traits
 				// HACK: HACK HACK HACK
 				// TODO: Derive this from BuildingCommonNames instead
 				var type = BuildingType.Building;
-				if (world.Map.Rules.Actors[currentBuilding.Item].HasTraitInfo<AttackBaseInfo>())
+
+				// Check if Building is a defense and if we should place it towards the enemy or not.
+				if (world.Map.Rules.Actors[currentBuilding.Item].HasTraitInfo<AttackBaseInfo>() && world.LocalRandom.Next(100) < baseBuilder.Info.PlaceDefenseTowardsEnemyChance)
 					type = BuildingType.Defense;
 				else if (baseBuilder.Info.RefineryTypes.Contains(world.Map.Rules.Actors[currentBuilding.Item].Name))
 					type = BuildingType.Refinery;
@@ -291,6 +293,12 @@ namespace OpenRA.Mods.Common.Traits
 			foreach (var frac in baseBuilder.Info.BuildingFractions.Shuffle(world.LocalRandom))
 			{
 				var name = frac.Key;
+
+				// Does this building have initial delay, if so have we passed it?
+				if (baseBuilder.Info.BuildingDelays != null &&
+					baseBuilder.Info.BuildingDelays.ContainsKey(name) &&
+					baseBuilder.Info.BuildingDelays[name] > world.WorldTick)
+					continue;
 
 				// Can we build this structure?
 				if (!buildableThings.Any(b => b.Name == name))

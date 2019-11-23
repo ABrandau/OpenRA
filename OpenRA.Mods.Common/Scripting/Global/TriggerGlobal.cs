@@ -20,7 +20,8 @@ namespace OpenRA.Mods.Common.Scripting
 	[ScriptGlobal("Trigger")]
 	public class TriggerGlobal : ScriptGlobal
 	{
-		public TriggerGlobal(ScriptContext context) : base(context) { }
+		public TriggerGlobal(ScriptContext context)
+			: base(context) { }
 
 		public static ScriptTriggers GetScriptTriggers(Actor a)
 		{
@@ -145,6 +146,13 @@ namespace OpenRA.Mods.Common.Scripting
 		public void OnProduction(Actor a, LuaFunction func)
 		{
 			GetScriptTriggers(a).RegisterCallback(Trigger.OnProduction, func, Context);
+		}
+
+		[Desc("Call a function when any actor produces another actor. The callback " +
+			"function will be called as func(Actor producer, Actor produced, string productionType).")]
+		public void OnAnyProduction(LuaFunction func)
+		{
+			GetScriptTriggers(Context.World.WorldActor).RegisterCallback(Trigger.OnOtherProduction, func, Context);
 		}
 
 		[Desc("Call a function when this player completes all primary objectives. " +
@@ -454,6 +462,19 @@ namespace OpenRA.Mods.Common.Scripting
 		public void OnPlayerDiscovered(Player discovered, LuaFunction func)
 		{
 			GetScriptTriggers(discovered.PlayerActor).RegisterCallback(Trigger.OnPlayerDiscovered, func, Context);
+		}
+
+		[Desc("Call a function when this actor is sold. The callback function " +
+			"will be called as func(Actor self).")]
+		public void OnSold(Actor a, LuaFunction func)
+		{
+			GetScriptTriggers(a).RegisterCallback(Trigger.OnSold, func, Context);
+		}
+
+		[Desc("Call a function when the game timer expires. The callback function will be called as func().")]
+		public void OnTimerExpired(LuaFunction func)
+		{
+			GetScriptTriggers(Context.World.WorldActor).RegisterCallback(Trigger.OnTimerExpired, func, Context);
 		}
 
 		[Desc("Removes all triggers from this actor. " +

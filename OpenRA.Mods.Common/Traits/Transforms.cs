@@ -10,6 +10,7 @@
 #endregion
 
 using System.Collections.Generic;
+using OpenRA.Activities;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Orders;
 using OpenRA.Traits;
@@ -19,7 +20,9 @@ namespace OpenRA.Mods.Common.Traits
 	[Desc("Actor becomes a specified actor type when this trait is triggered.")]
 	public class TransformsInfo : PausableConditionalTraitInfo
 	{
-		[Desc("Actor to transform into."), ActorReference, FieldLoader.Require]
+		[ActorReference]
+		[FieldLoader.Require]
+		[Desc("Actor to transform into.")]
 		public readonly string IntoActor = null;
 
 		[Desc("Offset to spawn the transformed actor relative to the current cell.")]
@@ -48,7 +51,8 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Cursor to display when unable to (un)deploy the actor.")]
 		public readonly string DeployBlockedCursor = "deploy-blocked";
 
-		[VoiceReference] public readonly string Voice = "Action";
+		[VoiceReference]
+		public readonly string Voice = "Action";
 
 		public override object Create(ActorInitializer init) { return new Transforms(init, this); }
 	}
@@ -71,7 +75,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public string VoicePhraseForOrder(Actor self, Order order)
 		{
-			return (order.OrderString == "DeployTransform") ? Info.Voice : null;
+			return order.OrderString == "DeployTransform" ? Info.Voice : null;
 		}
 
 		public bool CanDeploy()
@@ -80,6 +84,18 @@ namespace OpenRA.Mods.Common.Traits
 				return false;
 
 			return buildingInfo == null || self.World.CanPlaceBuilding(self.Location + Info.Offset, actorInfo, buildingInfo, self);
+		}
+
+		public Activity GetTransformActivity(Actor self)
+		{
+			return new Transform(self, Info.IntoActor)
+			{
+				Offset = Info.Offset,
+				Facing = Info.Facing,
+				Sounds = Info.TransformSounds,
+				Notification = Info.TransformNotification,
+				Faction = faction
+			};
 		}
 
 		public IEnumerable<IOrderTargeter> Orders
@@ -126,17 +142,7 @@ namespace OpenRA.Mods.Common.Traits
 				return;
 			}
 
-			if (!queued)
-				self.CancelActivity();
-
-			self.QueueActivity(new Transform(self, Info.IntoActor)
-			{
-				Offset = Info.Offset,
-				Facing = Info.Facing,
-				Sounds = Info.TransformSounds,
-				Notification = Info.TransformNotification,
-				Faction = faction
-			});
+			self.QueueActivity(queued, GetTransformActivity(self));
 		}
 
 		public void ResolveOrder(Actor self, Order order)

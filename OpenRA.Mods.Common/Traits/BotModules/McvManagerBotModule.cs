@@ -49,7 +49,7 @@ namespace OpenRA.Mods.Common.Traits
 		public override object Create(ActorInitializer init) { return new McvManagerBotModule(init.Self, this); }
 	}
 
-	public class McvManagerBotModule : ConditionalTrait<McvManagerBotModuleInfo>, IBotTick, IBotPositionsUpdated
+	public class McvManagerBotModule : ConditionalTrait<McvManagerBotModuleInfo>, IBotTick, IBotPositionsUpdated, IGameSaveTraitData
 	{
 		public CPos GetRandomBaseCenter()
 		{
@@ -71,9 +71,6 @@ namespace OpenRA.Mods.Common.Traits
 		CPos initialBaseCenter;
 		int scanInterval;
 		bool firstTick = true;
-
-		// MCVs that the bot already knows about. Any MCV not on this list needs to be given an order.
-		List<Actor> activeMCVs = new List<Actor>();
 
 		public McvManagerBotModule(Actor self, McvManagerBotModuleInfo info)
 			: base(info)
@@ -140,18 +137,10 @@ namespace OpenRA.Mods.Common.Traits
 
 		void DeployMcvs(IBot bot, bool chooseLocation)
 		{
-			activeMCVs.RemoveAll(unitCannotBeOrdered);
-
 			var newMCVs = world.ActorsHavingTrait<Transforms>()
-				.Where(a => a.Owner == player &&
-					a.IsIdle &&
-					Info.McvTypes.Contains(a.Info.Name) &&
-					!activeMCVs.Contains(a));
+				.Where(a => a.Owner == player && a.IsIdle && Info.McvTypes.Contains(a.Info.Name));
 
-			foreach (var a in newMCVs)
-				activeMCVs.Add(a);
-
-			foreach (var mcv in activeMCVs)
+			foreach (var mcv in newMCVs)
 				DeployMcv(bot, mcv, chooseLocation);
 		}
 
@@ -202,15 +191,8 @@ namespace OpenRA.Mods.Common.Traits
 					cells = cells.Shuffle(world.LocalRandom);
 
 				foreach (var cell in cells)
-				{
-					if (!world.CanPlaceBuilding(cell + offset, actorInfo, bi, null))
-						continue;
-
-					if (distanceToBaseIsImportant && !bi.IsCloseEnoughToBase(world, player, actorInfo, cell))
-						continue;
-
-					return cell;
-				}
+					if (world.CanPlaceBuilding(cell + offset, actorInfo, bi, null))
+						return cell;
 
 				return null;
 			};
@@ -219,6 +201,27 @@ namespace OpenRA.Mods.Common.Traits
 
 			return findPos(baseCenter, baseCenter, Info.MinBaseRadius,
 				distanceToBaseIsImportant ? Info.MaxBaseRadius : world.Map.Grid.MaximumTileSearchRange);
+		}
+
+		List<MiniYamlNode> IGameSaveTraitData.IssueTraitData(Actor self)
+		{
+			if (IsTraitDisabled)
+				return null;
+
+			return new List<MiniYamlNode>()
+			{
+				new MiniYamlNode("InitialBaseCenter", FieldSaver.FormatValue(initialBaseCenter))
+			};
+		}
+
+		void IGameSaveTraitData.ResolveTraitData(Actor self, List<MiniYamlNode> data)
+		{
+			if (self.World.IsReplay)
+				return;
+
+			var initialBaseCenterNode = data.FirstOrDefault(n => n.Key == "InitialBaseCenter");
+			if (initialBaseCenterNode != null)
+				initialBaseCenter = FieldLoader.GetValue<CPos>("InitialBaseCenter", initialBaseCenterNode.Value.Value);
 		}
 	}
 }

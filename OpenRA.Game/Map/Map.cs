@@ -566,6 +566,10 @@ namespace OpenRA
 			foreach (var field in YamlFields)
 				field.Serialize(this, root);
 
+			// HACK: map.yaml is expected to have empty lines between top-level blocks
+			for (var i = root.Count - 1; i > 0; i--)
+				root.Insert(i, new MiniYamlNode("", ""));
+
 			// Saving to a new package: copy over all the content from the map
 			if (Package != null && toPackage != Package)
 				foreach (var file in Package.Contents)
@@ -646,8 +650,24 @@ namespace OpenRA
 		public byte[] SavePreview()
 		{
 			var tileset = Rules.TileSet;
-			var resources = Rules.Actors["world"].TraitInfos<ResourceTypeInfo>()
-				.ToDictionary(r => r.ResourceType, r => r.TerrainType);
+			var actorTypes = Rules.Actors.Values.Where(a => a.HasTraitInfo<IMapPreviewSignatureInfo>());
+			var actors = ActorDefinitions.Where(a => actorTypes.Where(ai => ai.Name == a.Value.Value).Any());
+			var positions = new List<Pair<MPos, Color>>();
+			foreach (var actor in actors)
+			{
+				var s = new ActorReference(actor.Value.Value, actor.Value.ToDictionary());
+
+				var ai = Rules.Actors[actor.Value.Value];
+				var impsis = ai.TraitInfos<IMapPreviewSignatureInfo>();
+				foreach (var impsi in impsis)
+					impsi.PopulateMapPreviewSignatureCells(this, ai, s, positions);
+			}
+
+			// ResourceLayer is on world actor, which isn't caught above, so an extra check for it.
+			var worldActorInfo = Rules.Actors["world"];
+			var worldimpsis = worldActorInfo.TraitInfos<IMapPreviewSignatureInfo>();
+			foreach (var worldimpsi in worldimpsis)
+				worldimpsi.PopulateMapPreviewSignatureCells(this, worldActorInfo, null, positions);
 
 			using (var stream = new MemoryStream())
 			{
@@ -672,15 +692,10 @@ namespace OpenRA
 					for (var x = 0; x < width; x++)
 					{
 						var uv = new MPos(x + Bounds.Left, y + Bounds.Top);
-						var resourceType = Resources[uv].Type;
-						if (resourceType != 0)
+						var actorsThere = positions.Where(ap => ap.First == uv);
+						if (actorsThere.Any())
 						{
-							// Cell contains resources
-							string res;
-							if (!resources.TryGetValue(resourceType, out res))
-								continue;
-
-							leftColor = rightColor = tileset[tileset.GetTerrainIndex(res)].Color;
+							leftColor = rightColor = actorsThere.First().Second;
 						}
 						else
 						{
@@ -736,6 +751,11 @@ namespace OpenRA
 			// so we pre-filter these to avoid returning the wrong result
 			if (Grid.Type == MapGridType.RectangularIsometric && cell.X < cell.Y)
 				return false;
+
+			// If the mod uses flat & rectangular maps, ToMPos and Contains(MPos) create unnecessary cost.
+			// Just check if CPos is within map bounds.
+			if (Grid.MaximumTerrainHeight == 0 && Grid.Type == MapGridType.Rectangular)
+				return Bounds.Contains(cell.X, cell.Y);
 
 			return Contains(cell.ToMPos(this));
 		}
@@ -1064,7 +1084,8 @@ namespace OpenRA
 				var v = rand.Next(Bounds.Top, Bounds.Bottom);
 
 				cells = Unproject(new PPos(u, v));
-			} while (!cells.Any());
+			}
+			while (!cells.Any());
 
 			return cells.Random(rand).ToCPos(Grid.Type);
 		}

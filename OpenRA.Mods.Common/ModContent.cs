@@ -49,8 +49,11 @@ namespace OpenRA
 
 			public readonly string Title;
 
-			[FieldLoader.Ignore] public readonly MiniYaml IDFiles;
-			[FieldLoader.Ignore] public readonly List<MiniYamlNode> Install;
+			[FieldLoader.Ignore]
+			public readonly MiniYaml IDFiles;
+
+			[FieldLoader.Ignore]
+			public readonly List<MiniYamlNode> Install;
 
 			public ModSource(MiniYaml yaml)
 			{
@@ -73,6 +76,7 @@ namespace OpenRA
 			public readonly string Title;
 			public readonly string URL;
 			public readonly string MirrorList;
+			public readonly string SHA1;
 			public readonly Dictionary<string, string> Extract;
 
 			public ModDownload(MiniYaml yaml)

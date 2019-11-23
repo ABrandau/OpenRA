@@ -39,7 +39,7 @@ namespace OpenRA.Mods.Cnc.Traits
 	}
 
 	public class Chronoshiftable : ConditionalTrait<ChronoshiftableInfo>, ITick, ISync, ISelectionBar,
-		IDeathActorInitModifier, ITransformActorInitModifier, INotifyCreated
+		IDeathActorInitModifier, ITransformActorInitModifier
 	{
 		readonly Actor self;
 		Actor chronosphere;
@@ -48,8 +48,11 @@ namespace OpenRA.Mods.Cnc.Traits
 		IPositionable iPositionable;
 
 		// Return-to-origin logic
-		[Sync] public CPos Origin;
-		[Sync] public int ReturnTicks = 0;
+		[Sync]
+		public CPos Origin;
+
+		[Sync]
+		public int ReturnTicks = 0;
 
 		public Chronoshiftable(ActorInitializer init, ChronoshiftableInfo info)
 			: base(info)
@@ -77,8 +80,6 @@ namespace OpenRA.Mods.Cnc.Traits
 			// Return to original location
 			if (--ReturnTicks == 0)
 			{
-				self.CancelActivity();
-
 				// The Move activity is not immediately cancelled, which, combined
 				// with Activity.Cancel discarding NextActivity without checking the
 				// IsInterruptable flag, means that a well timed order can cancel the
@@ -92,14 +93,15 @@ namespace OpenRA.Mods.Cnc.Traits
 					typeof(Actor).GetProperty("CurrentActivity").SetValue(self, null);
 
 				// The actor is killed using Info.DamageTypes if the teleport fails
-				self.QueueActivity(new Teleport(chronosphere, Origin, null, true, killCargo, Info.ChronoshiftSound,
+				self.QueueActivity(false, new Teleport(chronosphere, Origin, null, true, killCargo, Info.ChronoshiftSound,
 					false, true, Info.DamageTypes));
 			}
 		}
 
-		void INotifyCreated.Created(Actor self)
+		protected override void Created(Actor self)
 		{
 			iPositionable = self.TraitOrDefault<IPositionable>();
+			base.Created(self);
 		}
 
 		// Can't be used in synced code, except with ignoreVis.
@@ -140,8 +142,7 @@ namespace OpenRA.Mods.Cnc.Traits
 			this.killCargo = killCargo;
 
 			// Set up the teleport
-			self.CancelActivity();
-			self.QueueActivity(new Teleport(chronosphere, targetLocation, null, killCargo, true, Info.ChronoshiftSound));
+			self.QueueActivity(false, new Teleport(chronosphere, targetLocation, null, killCargo, true, Info.ChronoshiftSound));
 
 			return true;
 		}
@@ -180,7 +181,9 @@ namespace OpenRA.Mods.Cnc.Traits
 
 	public class ChronoshiftReturnInit : IActorInit<int>
 	{
-		[FieldFromYamlKey] readonly int value = 0;
+		[FieldFromYamlKey]
+		readonly int value = 0;
+
 		public ChronoshiftReturnInit() { }
 		public ChronoshiftReturnInit(int init) { value = init; }
 		public int Value(World world) { return value; }
@@ -188,7 +191,9 @@ namespace OpenRA.Mods.Cnc.Traits
 
 	public class ChronoshiftDurationInit : IActorInit<int>
 	{
-		[FieldFromYamlKey] readonly int value = 0;
+		[FieldFromYamlKey]
+		readonly int value = 0;
+
 		public ChronoshiftDurationInit() { }
 		public ChronoshiftDurationInit(int init) { value = init; }
 		public int Value(World world) { return value; }
@@ -196,7 +201,9 @@ namespace OpenRA.Mods.Cnc.Traits
 
 	public class ChronoshiftOriginInit : IActorInit<CPos>
 	{
-		[FieldFromYamlKey] readonly CPos value;
+		[FieldFromYamlKey]
+		readonly CPos value;
+
 		public ChronoshiftOriginInit(CPos init) { value = init; }
 		public CPos Value(World world) { return value; }
 	}

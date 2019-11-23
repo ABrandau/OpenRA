@@ -50,7 +50,8 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly string EnterCursor = "enter";
 		public readonly string EnterBlockedCursor = "enter-blocked";
 
-		[VoiceReference] public readonly string Voice = "Action";
+		[VoiceReference]
+		public readonly string Voice = "Action";
 
 		public override object Create(ActorInitializer init) { return new Captures(init.Self, this); }
 	}
@@ -94,11 +95,8 @@ namespace OpenRA.Mods.Common.Traits
 			if (order.OrderString != "CaptureActor" || IsTraitDisabled)
 				return;
 
-			if (!order.Queued)
-				self.CancelActivity();
-
-			self.SetTargetLine(order.Target, Color.Red);
-			self.QueueActivity(new CaptureActor(self, order.Target));
+			self.QueueActivity(order.Queued, new CaptureActor(self, order.Target));
+			self.ShowTargetLines();
 		}
 
 		protected override void TraitEnabled(Actor self) { captureManager.RefreshCaptures(self); }

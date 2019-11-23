@@ -31,12 +31,18 @@ namespace OpenRA.Mods.Common.Traits.Render
 		public readonly string Image = null;
 
 		[Desc("Custom palette name")]
-		[PaletteReference] public readonly string Palette = null;
+		[PaletteReference]
+		public readonly string Palette = null;
 
+		[PaletteReference]
 		[Desc("Custom PlayerColorPalette: BaseName")]
-		[PaletteReference] public readonly string PlayerPalette = "player";
-		[PaletteReference] public readonly string NormalsPalette = "normals";
-		[PaletteReference] public readonly string ShadowPalette = "shadow";
+		public readonly string PlayerPalette = "player";
+
+		[PaletteReference]
+		public readonly string NormalsPalette = "normals";
+
+		[PaletteReference]
+		public readonly string ShadowPalette = "shadow";
 
 		[Desc("Change the image size.")]
 		public readonly float Scale = 12;
@@ -141,10 +147,13 @@ namespace OpenRA.Mods.Common.Traits.Render
 				initializePalettes = false;
 			}
 
-			return new IRenderable[] { new ModelRenderable(
-				components, self.CenterPosition, 0, camera, Info.Scale,
-				lightSource, Info.LightAmbientColor, Info.LightDiffuseColor,
-				colorPalette, normalsPalette, shadowPalette) };
+			return new IRenderable[]
+			{
+				new ModelRenderable(
+					components, self.CenterPosition, 0, camera, Info.Scale,
+					lightSource, Info.LightAmbientColor, Info.LightDiffuseColor,
+					colorPalette, normalsPalette, shadowPalette)
+			};
 		}
 
 		IEnumerable<Rectangle> IRender.ScreenBounds(Actor self, WorldRenderer wr)

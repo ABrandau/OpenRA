@@ -18,7 +18,9 @@ namespace OpenRA.Mods.Common.Traits
 	[Desc("Put this on the actor that gets crushed to replace the crusher with a new actor.")]
 	public class TransformCrusherOnCrushInfo : ITraitInfo
 	{
-		[ActorReference, FieldLoader.Require] public readonly string IntoActor = null;
+		[ActorReference]
+		[FieldLoader.Require]
+		public readonly string IntoActor = null;
 
 		public readonly bool SkipMakeAnims = true;
 
@@ -51,8 +53,7 @@ namespace OpenRA.Mods.Common.Traits
 				transform.Facing = facing.Facing;
 
 			transform.SkipMakeAnims = info.SkipMakeAnims;
-			crusher.CancelActivity();
-			crusher.QueueActivity(transform);
+			crusher.QueueActivity(false, transform);
 		}
 	}
 }

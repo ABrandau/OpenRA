@@ -37,8 +37,9 @@ namespace OpenRA.Mods.Common.Traits
 			"Possible values are Exit, Suicide, Dispose.")]
 		public readonly EnterBehaviour EnterBehaviour = EnterBehaviour.Exit;
 
+		[VoiceReference]
 		[Desc("Voice string when planting explosive charges.")]
-		[VoiceReference] public readonly string Voice = "Action";
+		public readonly string Voice = "Action";
 
 		public readonly Stance TargetStances = Stance.Enemy | Stance.Neutral;
 		public readonly Stance ForceTargetStances = Stance.Enemy | Stance.Neutral | Stance.Ally;
@@ -82,12 +83,10 @@ namespace OpenRA.Mods.Common.Traits
 					return;
 			}
 
-			if (!order.Queued)
-				self.CancelActivity();
-
-			self.SetTargetLine(order.Target, Color.Red);
-			self.QueueActivity(new Demolish(self, order.Target, info.EnterBehaviour, info.DetonationDelay,
+			self.QueueActivity(order.Queued, new Demolish(self, order.Target, info.EnterBehaviour, info.DetonationDelay,
 				info.Flashes, info.FlashesDelay, info.FlashInterval));
+
+			self.ShowTargetLines();
 		}
 
 		public string VoicePhraseForOrder(Actor self, Order order)

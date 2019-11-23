@@ -108,7 +108,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			this.skirmishMode = skirmishMode;
 
 			// TODO: This needs to be reworked to support per-map tech levels, bots, etc.
-			this.modRules = modData.DefaultRules;
+			modRules = modData.DefaultRules;
 			shellmapWorld = worldRenderer.World;
 
 			services = modData.Manifest.Get<WebServices>();
@@ -127,9 +127,14 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			{
 				{ "orderManager", orderManager },
 				{ "getMap", (Func<MapPreview>)(() => map) },
-				{ "onMouseDown",  (Action<MapPreviewWidget, MapPreview, MouseInput>)((preview, mapPreview, mi) =>
-					LobbyUtils.SelectSpawnPoint(orderManager, preview, mapPreview, mi)) },
-				{ "getSpawnOccupants", (Func<MapPreview, Dictionary<CPos, SpawnOccupant>>)(mapPreview => LobbyUtils.GetSpawnOccupants(orderManager.LobbyInfo, mapPreview)) },
+				{
+					"onMouseDown", (Action<MapPreviewWidget, MapPreview, MouseInput>)((preview, mapPreview, mi) =>
+						LobbyUtils.SelectSpawnPoint(orderManager, preview, mapPreview, mi))
+				},
+				{
+					"getSpawnOccupants", (Func<MapPreview, Dictionary<CPos, SpawnOccupant>>)(mapPreview =>
+						LobbyUtils.GetSpawnOccupants(orderManager.LobbyInfo, mapPreview))
+				},
 				{ "showUnoccupiedSpawnpoints", true },
 			});
 
@@ -402,7 +407,11 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				// Always scroll to bottom when we've typed something
 				lobbyChatPanel.ScrollToBottom();
 
-				orderManager.IssueOrder(Order.Chat(teamChat, chatTextField.Text));
+				var teamNumber = 0U;
+				if (teamChat && orderManager.LocalClient != null)
+					teamNumber = orderManager.LocalClient.IsObserver ? uint.MaxValue : (uint)orderManager.LocalClient.Team;
+
+				orderManager.IssueOrder(Order.Chat(chatTextField.Text, teamNumber));
 				chatTextField.Text = "";
 				return true;
 			};
@@ -471,10 +480,10 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				panel = PanelType.Players;
 		}
 
-		void AddChatLine(Color c, string from, string text)
+		void AddChatLine(string name, Color nameColor, string text, Color textColor)
 		{
 			var template = (ContainerWidget)chatTemplate.Clone();
-			LobbyUtils.SetupChatLine(template, c, DateTime.Now, from, text);
+			LobbyUtils.SetupChatLine(template, DateTime.Now, name, nameColor, text, textColor);
 
 			var scrolledToBottom = lobbyChatPanel.ScrolledToBottom;
 			lobbyChatPanel.AddChild(template);
@@ -546,8 +555,15 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			if (orderManager.LocalClient == null)
 				return;
 
-			disableTeamChat = orderManager.LocalClient.Team == 0 ||
-				!orderManager.LobbyInfo.Clients.Any(c =>
+			// Check if we are not assigned to any team, and are no spectator
+			// If we are a spectator, check if there are more and enable spectator chat
+			// Otherwise check if our assigned team has more players
+			if (orderManager.LocalClient.Team == 0 && !orderManager.LocalClient.IsObserver)
+				disableTeamChat = true;
+			else if (orderManager.LocalClient.IsObserver)
+				disableTeamChat = !orderManager.LobbyInfo.Clients.Any(c => c != orderManager.LocalClient && c.IsObserver);
+			else
+				disableTeamChat = !orderManager.LobbyInfo.Clients.Any(c =>
 					c != orderManager.LocalClient &&
 					c.Bot == null &&
 					c.Team == orderManager.LocalClient.Team);

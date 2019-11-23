@@ -21,6 +21,7 @@ namespace OpenRA
 {
 	public enum MouseScrollType { Disabled, Standard, Inverted, Joystick }
 	public enum StatusBarsType { Standard, DamageShow, AlwaysShow }
+	public enum TargetLinesType { Disabled, Manual, Automatic }
 
 	[Flags]
 	public enum MPGameFilters
@@ -77,7 +78,8 @@ namespace OpenRA
 		[Desc("Enable client-side report generation to help debug desync errors.")]
 		public bool EnableSyncReports = false;
 
-		public string TimestampFormat = "s";
+		[Desc("Sets the timestamp format. Defaults to the ISO 8601 standard.")]
+		public string TimestampFormat = "yyyy-MM-ddTHH:mm:ss";
 
 		public ServerSettings Clone()
 		{
@@ -128,9 +130,6 @@ namespace OpenRA
 
 		[Desc("Throw an exception if the world sync hash changes while evaluating BotModules.")]
 		public bool SyncCheckBotModuleCode = false;
-
-		[Desc("Throw an exception if an actor activity is ticked after it has been marked as completed.")]
-		public bool StrictActivityChecking = false;
 	}
 
 	public class GraphicSettings
@@ -160,6 +159,9 @@ namespace OpenRA
 
 		[Desc("Disable separate OpenGL render thread on Windows operating systems.")]
 		public bool DisableWindowsRenderThread = true;
+
+		[Desc("Use OpenGL ES if both ES and regular OpenGL are available.")]
+		public bool PreferGLES = false;
 
 		public int BatchSize = 8192;
 		public int SheetSize = 2048;
@@ -203,15 +205,15 @@ namespace OpenRA
 		public MouseScrollType MiddleMouseScroll = MouseScrollType.Standard;
 		public MouseScrollType RightMouseScroll = MouseScrollType.Disabled;
 		public MouseButtonPreference MouseButtonPreference = new MouseButtonPreference();
-		public float ViewportEdgeScrollStep = 10f;
+		public float ViewportEdgeScrollStep = 30f;
 		public float UIScrollSpeed = 50f;
 		public int SelectionDeadzone = 24;
 		public int MouseScrollDeadzone = 8;
 
 		public bool UseClassicMouseStyle = false;
 		public StatusBarsType StatusBars = StatusBarsType.Standard;
+		public TargetLinesType TargetLines = TargetLinesType.Manual;
 		public bool UsePlayerStanceColors = false;
-		public bool DrawTargetLine = true;
 
 		public bool AllowDownloading = true;
 

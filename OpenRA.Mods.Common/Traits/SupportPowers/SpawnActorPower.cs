@@ -19,7 +19,8 @@ namespace OpenRA.Mods.Common.Traits
 	[Desc("Spawns an actor that stays for a limited amount of time.")]
 	public class SpawnActorPowerInfo : SupportPowerInfo
 	{
-		[ActorReference, FieldLoader.Require]
+		[ActorReference]
+		[FieldLoader.Require]
 		[Desc("Actor to spawn.")]
 		public readonly string Actor = null;
 
@@ -29,15 +30,21 @@ namespace OpenRA.Mods.Common.Traits
 		public readonly string DeploySound = null;
 
 		public readonly string EffectImage = null;
-		[SequenceReference("EffectImage")] public readonly string EffectSequence = "idle";
-		[PaletteReference] public readonly string EffectPalette = null;
+
+		[SequenceReference("EffectImage")]
+		public readonly string EffectSequence = "idle";
+
+		[PaletteReference]
+		public readonly string EffectPalette = null;
 
 		public override object Create(ActorInitializer init) { return new SpawnActorPower(init.Self, this); }
 	}
 
 	public class SpawnActorPower : SupportPower
 	{
-		public SpawnActorPower(Actor self, SpawnActorPowerInfo info) : base(self, info) { }
+		public SpawnActorPower(Actor self, SpawnActorPowerInfo info)
+			: base(self, info) { }
+
 		public override void Activate(Actor self, Order order, SupportPowerManager manager)
 		{
 			base.Activate(self, order, manager);

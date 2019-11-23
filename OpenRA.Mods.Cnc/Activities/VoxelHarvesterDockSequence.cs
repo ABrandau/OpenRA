@@ -27,32 +27,32 @@ namespace OpenRA.Mods.Cnc.Activities
 			spriteOverlay = refinery.TraitOrDefault<WithDockingOverlay>();
 		}
 
-		public override Activity OnStateDock(Actor self)
+		public override void OnStateDock(Actor self)
 		{
 			body.Docked = true;
 
 			if (spriteOverlay != null && !spriteOverlay.Visible)
 			{
 				spriteOverlay.Visible = true;
-				spriteOverlay.WithOffset.Animation.PlayThen(spriteOverlay.Info.Sequence, () => {
+				spriteOverlay.WithOffset.Animation.PlayThen(spriteOverlay.Info.Sequence, () =>
+				{
 					dockingState = DockingState.Loop;
 					spriteOverlay.Visible = false;
 				});
 			}
 			else
 				dockingState = DockingState.Loop;
-
-			return this;
 		}
 
-		public override Activity OnStateUndock(Actor self)
+		public override void OnStateUndock(Actor self)
 		{
 			dockingState = DockingState.Wait;
 
 			if (spriteOverlay != null && !spriteOverlay.Visible)
 			{
 				spriteOverlay.Visible = true;
-				spriteOverlay.WithOffset.Animation.PlayBackwardsThen(spriteOverlay.Info.Sequence, () => {
+				spriteOverlay.WithOffset.Animation.PlayBackwardsThen(spriteOverlay.Info.Sequence, () =>
+				{
 					dockingState = DockingState.Complete;
 					body.Docked = false;
 					spriteOverlay.Visible = false;
@@ -63,8 +63,6 @@ namespace OpenRA.Mods.Cnc.Activities
 				dockingState = DockingState.Complete;
 				body.Docked = false;
 			}
-
-			return this;
 		}
 	}
 }

@@ -9,9 +9,11 @@
  */
 #endregion
 
-using System;
+using System.Collections.Generic;
 using OpenRA.Activities;
 using OpenRA.Mods.Common.Traits;
+using OpenRA.Primitives;
+using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Activities
 {
@@ -19,43 +21,52 @@ namespace OpenRA.Mods.Common.Activities
 	{
 		readonly Aircraft aircraft;
 		readonly IMove move;
-		Func<Actor, Activity, CPos, bool> moveToRallyPoint;
 
 		public TakeOff(Actor self)
 		{
 			aircraft = self.Trait<Aircraft>();
 			move = self.Trait<IMove>();
-			moveToRallyPoint = (actor, activity, pos) => NextActivity == null;
 		}
 
-		public TakeOff(Actor self, Func<Actor, Activity, CPos, bool> moveToRallyPoint)
-			: this(self)
+		protected override void OnFirstRun(Actor self)
 		{
-			this.moveToRallyPoint = moveToRallyPoint;
+			if (aircraft.ForceLanding)
+				return;
+
+			if (self.World.Map.DistanceAboveTerrain(aircraft.CenterPosition).Length >= aircraft.Info.MinAirborneAltitude)
+				return;
+
+			// We are taking off, so remove influence in ground cells.
+			aircraft.RemoveInfluence();
+
+			if (aircraft.Info.TakeoffSounds.Length > 0)
+				Game.Sound.Play(SoundType.World, aircraft.Info.TakeoffSounds, self.World, aircraft.CenterPosition);
 		}
 
-		public override Activity Tick(Actor self)
+		public override bool Tick(Actor self)
 		{
 			// Refuse to take off if it would land immediately again.
 			if (aircraft.ForceLanding)
 			{
 				Cancel(self);
-				return NextActivity;
+				return true;
 			}
 
-			aircraft.UnReserve();
+			var dat = self.World.Map.DistanceAboveTerrain(aircraft.CenterPosition);
+			if (dat < aircraft.Info.CruiseAltitude)
+			{
+				// If we're a VTOL, rise before flying forward
+				if (aircraft.Info.VTOL)
+				{
+					Fly.VerticalTakeOffOrLandTick(self, aircraft, aircraft.Facing, aircraft.Info.CruiseAltitude);
+					return false;
+				}
 
-			var host = aircraft.GetActorBelow();
-			var hasHost = host != null;
-			var rp = hasHost ? host.TraitOrDefault<RallyPoint>() : null;
+				Fly.FlyTick(self, aircraft, aircraft.Facing, aircraft.Info.CruiseAltitude);
+				return false;
+			}
 
-			var destination = rp != null ? rp.Location :
-				(hasHost ? self.World.Map.CellContaining(host.CenterPosition) : self.Location);
-
-			if (moveToRallyPoint(self, this, destination))
-				return new AttackMoveActivity(self, move.MoveTo(destination, 1));
-			else
-				return NextActivity;
+			return true;
 		}
 	}
 }

@@ -50,9 +50,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (IsTraitDisabled || self.Owner.WinState == WinState.Lost || !self.World.Map.Contains(self.Location))
 				return;
 
-			var r = self.World.SharedRandom.Next(1, 100);
-
-			if (r <= 100 - Info.SuccessRate)
+			if (self.World.SharedRandom.Next(100) >= Info.SuccessRate)
 				return;
 
 			var cp = self.CenterPosition;
@@ -60,35 +58,47 @@ namespace OpenRA.Mods.Common.Traits
 			if ((inAir && !Info.EjectInAir) || (!inAir && !Info.EjectOnGround))
 				return;
 
-			var pilot = self.World.CreateActor(false, Info.PilotActor.ToLowerInvariant(),
-				new TypeDictionary { new OwnerInit(self.Owner), new LocationInit(self.Location) });
-
-			if (Info.AllowUnsuitableCell || IsSuitableCell(self, pilot))
+			self.World.AddFrameEndTask(w =>
 			{
+				if (!Info.AllowUnsuitableCell)
+				{
+					var pilotInfo = self.World.Map.Rules.Actors[Info.PilotActor.ToLowerInvariant()];
+					var pilotPositionable = pilotInfo.TraitInfo<IPositionableInfo>();
+					if (!pilotPositionable.CanEnterCell(self.World, null, self.Location))
+						return;
+				}
+
+				var td = new TypeDictionary
+				{
+					new OwnerInit(self.Owner),
+					new LocationInit(self.Location),
+				};
+
+				// If airborne, offset the spawn location so the pilot doesn't drop on another infantry's head
+				var spawnPos = cp;
 				if (inAir)
 				{
-					self.World.AddFrameEndTask(w =>
+					var subCell = self.World.ActorMap.FreeSubCell(self.Location);
+					if (subCell != SubCell.Invalid)
 					{
-						w.Add(pilot);
-						pilot.QueueActivity(new Parachute(pilot, cp));
-					});
-					Game.Sound.Play(SoundType.World, Info.ChuteSound, cp);
+						td.Add(new SubCellInit(subCell));
+						spawnPos = self.World.Map.CenterOfSubCell(self.Location, subCell) + new WVec(0, 0, spawnPos.Z);
+					}
 				}
-				else
+
+				td.Add(new CenterPositionInit(spawnPos));
+
+				var pilot = self.World.CreateActor(true, Info.PilotActor.ToLowerInvariant(), td);
+
+				if (!inAir)
 				{
-					self.World.AddFrameEndTask(w => w.Add(pilot));
 					var pilotMobile = pilot.TraitOrDefault<Mobile>();
 					if (pilotMobile != null)
-						pilotMobile.Nudge(pilot, pilot, true);
+						pilotMobile.Nudge(pilot);
 				}
-			}
-			else
-				pilot.Dispose();
-		}
-
-		static bool IsSuitableCell(Actor self, Actor actorToDrop)
-		{
-			return actorToDrop.Trait<IPositionable>().CanEnterCell(self.Location, self, true);
+				else
+					Game.Sound.Play(SoundType.World, Info.ChuteSound, cp);
+			});
 		}
 	}
 }

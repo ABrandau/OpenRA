@@ -10,6 +10,7 @@
 #endregion
 
 using System.Linq;
+using Eluant;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Scripting;
@@ -35,16 +36,28 @@ namespace OpenRA.Mods.Common.Scripting
 		public int PassengerCount { get { return cargo.Passengers.Count(); } }
 
 		[Desc("Teleport an existing actor inside this transport.")]
-		public void LoadPassenger(Actor a) { cargo.Load(Self, a); }
+		public void LoadPassenger(Actor a)
+		{
+			if (!a.IsIdle)
+				throw new LuaException("LoadPassenger requires the passenger to be idle.");
+
+			cargo.Load(Self, a);
+		}
 
 		[Desc("Remove the first actor from the transport.  This actor is not added to the world.")]
 		public Actor UnloadPassenger() { return cargo.Unload(Self); }
 
 		[ScriptActorPropertyActivity]
 		[Desc("Command transport to unload passengers.")]
-		public void UnloadPassengers()
+		public void UnloadPassengers(CPos? cell = null, int unloadRange = 5)
 		{
-			Self.QueueActivity(new UnloadCargo(Self, true));
+			if (cell.HasValue)
+			{
+				var destination = Target.FromCell(Self.World, cell.Value);
+				Self.QueueActivity(new UnloadCargo(Self, destination, WDist.FromCells(unloadRange)));
+			}
+			else
+				Self.QueueActivity(new UnloadCargo(Self, WDist.FromCells(unloadRange)));
 		}
 	}
 }

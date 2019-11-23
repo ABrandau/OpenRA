@@ -66,9 +66,14 @@ namespace OpenRA.Mods.Common.Widgets
 
 		public readonly bool DrawTime = true;
 
-		[Translate] public readonly string ReadyText = "";
-		[Translate] public readonly string HoldText = "";
-		[Translate] public readonly string InfiniteSymbol = "\u221E";
+		[Translate]
+		public readonly string ReadyText = "";
+
+		[Translate]
+		public readonly string HoldText = "";
+
+		[Translate]
+		public readonly string InfiniteSymbol = "\u221E";
 
 		public int DisplayedIconCount { get; private set; }
 		public int TotalIconCount { get; private set; }
@@ -213,7 +218,7 @@ namespace OpenRA.Mods.Common.Widgets
 		{
 			if (TooltipContainer != null)
 				tooltipContainer.Value.SetTooltip(TooltipTemplate,
-					new WidgetArgs() { { "player", World.LocalPlayer }, { "getTooltipIcon", GetTooltipIcon } });
+					new WidgetArgs() { { "player", World.LocalPlayer }, { "getTooltipIcon", GetTooltipIcon }, { "world", World } });
 		}
 
 		public override void MouseExited()
@@ -420,7 +425,7 @@ namespace OpenRA.Mods.Common.Widgets
 				DisplayedIconCount++;
 			}
 
-			eventBounds = icons.Any() ? icons.Keys.Aggregate(Rectangle.Union) : Rectangle.Empty;
+			eventBounds = icons.Keys.Union();
 
 			if (oldIconCount != DisplayedIconCount)
 				OnIconCountChanged(oldIconCount, DisplayedIconCount);

@@ -15,6 +15,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Net;
 using System.Text;
+using ICSharpCode.SharpZipLib.Zip;
 using OpenRA.Primitives;
 using OpenRA.Support;
 using OpenRA.Widgets;
@@ -136,6 +137,37 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 					return;
 				}
 
+				// Validate integrity
+				if (!string.IsNullOrEmpty(download.SHA1))
+				{
+					getStatusText = () => "Verifying archive...";
+					progressBar.Indeterminate = true;
+
+					var archiveValid = false;
+					try
+					{
+						using (var stream = File.OpenRead(file))
+						{
+							var archiveSHA1 = CryptoUtil.SHA1Hash(stream);
+							Log.Write("install", "Downloaded SHA1: " + archiveSHA1);
+							Log.Write("install", "Expected SHA1: " + download.SHA1);
+
+							archiveValid = archiveSHA1 == download.SHA1;
+						}
+					}
+					catch (Exception e)
+					{
+						Log.Write("install", "SHA1 calculation failed: " + e.ToString());
+					}
+
+					if (!archiveValid)
+					{
+						onError("Archive validation failed");
+						deleteTempFile();
+						return;
+					}
+				}
+
 				// Automatically extract
 				getStatusText = () => "Extracting...";
 				progressBar.Indeterminate = true;
@@ -144,7 +176,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				try
 				{
 					using (var stream = File.OpenRead(file))
-					using (var z = ZipFileHelper.Create(stream))
+					using (var z = new ZipFile(stream))
 					{
 						foreach (var kv in download.Extract)
 						{

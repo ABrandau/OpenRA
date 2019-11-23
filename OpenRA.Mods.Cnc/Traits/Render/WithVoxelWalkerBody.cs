@@ -72,7 +72,8 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 
 		void ITick.Tick(Actor self)
 		{
-			if (movement.IsMoving)
+			if (movement.CurrentMovementTypes.HasFlag(MovementType.Horizontal)
+				|| movement.CurrentMovementTypes.HasFlag(MovementType.Turn))
 				tick++;
 
 			if (tick < info.TickRate)
@@ -96,7 +97,9 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 
 	public class BodyAnimationFrameInit : IActorInit<uint>
 	{
-		[FieldFromYamlKey] readonly uint value = 0;
+		[FieldFromYamlKey]
+		readonly uint value = 0;
+
 		public BodyAnimationFrameInit() { }
 		public BodyAnimationFrameInit(uint init) { value = init; }
 		public uint Value(World world) { return value; }

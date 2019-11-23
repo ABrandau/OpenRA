@@ -106,7 +106,7 @@ namespace OpenRA.Mods.Common.Projectiles
 		public readonly Color BeamColor;
 		public readonly Color HelixColor;
 
-		int ticks = 0;
+		int ticks;
 		bool animationComplete;
 		WPos target;
 
@@ -125,8 +125,8 @@ namespace OpenRA.Mods.Common.Projectiles
 			this.info = info;
 			target = args.PassiveTarget;
 
-			this.BeamColor = beamColor;
-			this.HelixColor = helixColor;
+			BeamColor = beamColor;
+			HelixColor = helixColor;
 
 			if (!string.IsNullOrEmpty(info.HitAnim))
 				hitanim = new Animation(args.SourceActor.World, info.HitAnim);
@@ -153,14 +153,17 @@ namespace OpenRA.Mods.Common.Projectiles
 
 			// An easy vector to find which is perpendicular vector to forwardStep, with 0 Z component
 			LeftVector = new WVec(ForwardStep.Y, -ForwardStep.X, 0);
-			LeftVector = 1024 * LeftVector / LeftVector.Length;
+			if (LeftVector.LengthSquared != 0)
+				LeftVector = 1024 * LeftVector / LeftVector.Length;
 
 			// Vector that is pointing upwards from the ground
 			UpVector = new WVec(
 				-ForwardStep.X * ForwardStep.Z,
 				-ForwardStep.Z * ForwardStep.Y,
 				ForwardStep.X * ForwardStep.X + ForwardStep.Y * ForwardStep.Y);
-			UpVector = 1024 * UpVector / UpVector.Length;
+
+			if (UpVector.LengthSquared != 0)
+				UpVector = 1024 * UpVector / UpVector.Length;
 
 			//// LeftVector and UpVector are unit vectors of size 1024.
 

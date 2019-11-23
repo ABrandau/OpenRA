@@ -199,7 +199,7 @@
 	AutoTargetPriority@ATTACKANYTHING:
 		RequiresCondition: stance-attackanything || assault-move
 	AttackMove:
-		AssaultMoveScanCondition: assault-move
+		AssaultMoveCondition: assault-move
 
 ^AutoTargetAir:
 	AutoTarget:
@@ -226,7 +226,7 @@
 	AutoTargetPriority@ATTACKANYTHING:
 		RequiresCondition: stance-attackanything || assault-move
 	AttackMove:
-		AssaultMoveScanCondition: assault-move
+		AssaultMoveCondition: assault-move
 
 ^AcceptsCloakCrate:
 	Cloak:
@@ -242,9 +242,18 @@
 		Condition: cloak-force-disabled
 		ValidDamageStates: Critical
 
+^FlatSelectionMode:
+	Selectable:
+		PriorityModifiers: Ctrl
+
+^LowPrioritySelectionMode:
+	Selectable:
+		PriorityModifiers: Ctrl, Alt
+
 ^Vehicle:
 	Inherits@1: ^ExistsInWorld
 	Inherits@3: ^SpriteActor
+	Inherits@SELECTION_MODE: ^FlatSelectionMode
 	Huntable:
 	OwnerLostAction:
 		Action: Kill
@@ -294,11 +303,12 @@
 ^Helicopter:
 	Inherits@1: ^ExistsInWorld
 	Inherits@3: ^SpriteActor
+	Inherits@SELECTION_MODE: ^FlatSelectionMode
 	Huntable:
 	OwnerLostAction:
 		Action: Kill
 	AppearsOnRadar:
-		UseLocation: yes
+		UseLocation: true
 	Targetable@GROUND:
 		TargetTypes: Ground, Vehicle
 		RequiresCondition: !airborne
@@ -312,13 +322,15 @@
 	Repairable:
 		RepairActors: hpad
 	Aircraft:
-		LandWhenIdle: false
 		AirborneCondition: airborne
 		CruisingCondition: cruising
 		CanHover: True
 		TakeOffOnResupply: true
 		VTOL: true
+		LandableTerrainTypes: Clear, Rough, Road, Beach, Tiberium, BlueTiberium
+		Crushes: crate, infantry
 		InitialFacing: 224
+		CanSlide: True
 	HiddenUnderFog:
 		Type: GroundPosition
 	ActorLostNotification:
@@ -351,6 +363,7 @@
 ^Infantry:
 	Inherits@1: ^ExistsInWorld
 	Inherits@3: ^SpriteActor
+	Inherits@SELECTION_MODE: ^FlatSelectionMode
 	Huntable:
 	OwnerLostAction:
 		Action: Kill
@@ -475,6 +488,7 @@
 	WithInfantryBody:
 		IdleSequences: idle1, idle2
 		StandSequences: stand, stand2
+	AttackFrontal:
 
 ^CivInfantry:
 	Inherits: ^Infantry
@@ -516,6 +530,7 @@
 	Inherits@1: ^ExistsInWorld
 	Inherits@2: ^SpriteActor
 	Inherits@AUTOTARGET: ^AutoTargetGroundAssaultMove
+	Inherits@SELECTION_MODE: ^FlatSelectionMode
 	Huntable:
 	OwnerLostAction:
 		Action: Kill
@@ -572,6 +587,7 @@
 	Inherits@1: ^ExistsInWorld
 	Inherits@2: ^SpriteActor
 	Inherits@AUTOTARGET: ^AutoTargetGroundAssaultMove
+	Inherits@SELECTION_MODE: ^FlatSelectionMode
 	Huntable:
 	Health:
 		HP: 30000
@@ -632,7 +648,7 @@
 	OwnerLostAction:
 		Action: Kill
 	AppearsOnRadar:
-		UseLocation: yes
+		UseLocation: true
 	HiddenUnderFog:
 		Type: GroundPosition
 		AlwaysVisibleStances: None
@@ -642,16 +658,17 @@
 		Offset: 43, 128, 0
 		ZOffset: -129
 	WithFacingSpriteBody:
-	FlyAwayOnIdle:
 	RejectsOrders:
 	Aircraft:
 		CruiseAltitude: 2560
+		IdleBehavior: LeaveMap
 	MapEditorData:
 		Categories: Aircraft
 
 ^Ship:
 	Inherits@1: ^ExistsInWorld
 	Inherits@3: ^SpriteActor
+	Inherits@SELECTION_MODE: ^FlatSelectionMode
 	Huntable:
 	OwnerLostAction:
 		Action: Kill
@@ -698,6 +715,8 @@
 	Building:
 		Dimensions: 1,1
 		Footprint: x
+	ActorPreviewPlaceBuildingPreview:
+		OverridePalette: placebuilding
 	SoundOnDamageTransition:
 		DamagedSounds: xplos.aud
 		DestroyedSounds: crumble.aud
@@ -708,7 +727,7 @@
 		EmptyWeapon: BuildingExplode
 	CaptureNotification:
 		Notification: BuildingCaptured
-		NewOwnerVoice: no
+		NewOwnerVoice: false
 	ActorLostNotification:
 		Notification: BuildingLost
 	ShakeOnDeath:
@@ -755,6 +774,7 @@
 		SellSounds: cashturn.aud
 	CaptureManager:
 	Capturable:
+		RequiresCondition: !build-incomplete
 		Types: building-sabotage
 	WithMakeAnimation:
 		Condition: build-incomplete
@@ -814,6 +834,7 @@
 		ShowOwnerRow: True
 	MapEditorData:
 		Categories: Tech building
+	AppearsOnMapPreview:
 	WithBuildingRepairDecoration:
 		Image: allyrepair
 		Sequence: repair
@@ -868,6 +889,8 @@
 		Footprint: x
 		BuildSounds: hvydoor1.aud
 		TerrainTypes: Clear,Road
+	FootprintPlaceBuildingPreview:
+		LineBuildSegmentPalette: placelinesegment
 	RequiresBuildableArea:
 		AreaTypes: building
 		Adjacent: 4
@@ -892,6 +915,10 @@
 	ScriptTriggers:
 	Health:
 		HP: 10000
+	AppearsOnMapPreview:
+		Terrain: Wall
+	RadarColorFromTerrain:
+		Terrain: Wall
 	MapEditorData:
 		Categories: Wall
 
@@ -909,6 +936,8 @@
 		Dimensions: 2,2
 	AppearsOnRadar:
 	RadarColorFromTerrain:
+		Terrain: Tree
+	AppearsOnMapPreview:
 		Terrain: Tree
 	Health:
 		HP: 50000
@@ -945,6 +974,8 @@
 	AppearsOnRadar:
 	RadarColorFromTerrain:
 		Terrain: Tree
+	AppearsOnMapPreview:
+		Terrain: Tree
 	Building:
 		Footprint: __ x_
 		Dimensions: 2,2
@@ -974,6 +1005,8 @@
 	AppearsOnRadar:
 	RadarColorFromTerrain:
 		Terrain: Tiberium
+	AppearsOnMapPreview:
+		Terrain: Tiberium
 	HiddenUnderShroud:
 	WithMakeAnimation:
 	MapEditorData:
@@ -995,6 +1028,8 @@
 		Dimensions: 2,2
 	AppearsOnRadar:
 	RadarColorFromTerrain:
+		Terrain: Tree
+	AppearsOnMapPreview:
 		Terrain: Tree
 	HiddenUnderShroud:
 	ScriptTriggers:
@@ -1027,7 +1062,7 @@
 		Damage: 100
 		Interval: 6
 	Targetable:
-		RequiresForceFire: yes
+		RequiresForceFire: true
 		TargetTypes: Ground, Husk
 	CaptureManager:
 	Capturable:
@@ -1059,6 +1094,7 @@
 	Aircraft:
 		CanHover: True
 		VTOL: true
+		CanSlide: True
 	FallsToEarth:
 		Spins: True
 		Moves: False
@@ -1076,7 +1112,7 @@
 		Name: Bridge
 		ShowOwnerRow: false
 	Targetable:
-		RequiresForceFire: yes
+		RequiresForceFire: true
 		TargetTypes: Ground, Water
 	Health:
 		HP: 60000

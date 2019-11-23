@@ -9,6 +9,7 @@
  */
 #endregion
 
+using Eluant;
 using OpenRA.Mods.Common.Effects;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Scripting;
@@ -20,17 +21,24 @@ namespace OpenRA.Mods.Common.Scripting
 	{
 		readonly RadarPings radarPings;
 
-		public BeaconGlobal(ScriptContext context) : base(context)
+		public BeaconGlobal(ScriptContext context)
+			: base(context)
 		{
 			radarPings = context.World.WorldActor.TraitOrDefault<RadarPings>();
 		}
 
 		[Desc("Creates a new beacon that stays for the specified time at the specified WPos. " +
-			"Does not remove player set beacons, nor gets removed by placing them.")]
-		public Beacon New(Player owner, WPos position, int duration = 30 * 25, bool showRadarPings = true)
+			"Does not remove player set beacons, nor gets removed by placing them. " +
+			"Requires the 'PlaceBeacon' trait on the player actor.")]
+		public void New(Player owner, WPos position, int duration = 30 * 25, bool showRadarPings = true)
 		{
-			var beacon = owner.PlayerActor.Info.TraitInfo<PlaceBeaconInfo>();
-			var playerBeacon = new Beacon(owner, position, duration, beacon.Palette, beacon.IsPlayerPalette, beacon.BeaconImage, beacon.ArrowSequence, beacon.CircleSequence);
+			var beacon = owner.PlayerActor.Info.TraitInfoOrDefault<PlaceBeaconInfo>();
+			if (beacon == null)
+				throw new LuaException("The player actor has no 'PlaceBeacon' trait.");
+
+			var playerBeacon = new Beacon(owner, position, duration, beacon.Palette, beacon.IsPlayerPalette,
+				beacon.BeaconImage, beacon.BeaconSequence, beacon.ArrowSequence, beacon.CircleSequence);
+
 			owner.PlayerActor.World.AddFrameEndTask(w => w.Add(playerBeacon));
 
 			if (showRadarPings && radarPings != null)
@@ -41,8 +49,6 @@ namespace OpenRA.Mods.Common.Scripting
 					owner.Color,
 					duration);
 			}
-
-			return playerBeacon;
 		}
 	}
 }

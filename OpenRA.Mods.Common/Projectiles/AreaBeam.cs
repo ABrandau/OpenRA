@@ -82,9 +82,15 @@ namespace OpenRA.Mods.Common.Projectiles
 		readonly Color color;
 		readonly WDist speed;
 
-		[Sync] WPos headPos;
-		[Sync] WPos tailPos;
-		[Sync] WPos target;
+		[Sync]
+		WPos headPos;
+
+		[Sync]
+		WPos tailPos;
+
+		[Sync]
+		WPos target;
+
 		int length;
 		int towardsTargetFacing;
 		int headTicks;
@@ -93,8 +99,13 @@ namespace OpenRA.Mods.Common.Projectiles
 		bool isTailTravelling;
 		bool continueTracking = true;
 
-		bool IsBeamComplete { get { return !isHeadTravelling && headTicks >= length &&
-			!isTailTravelling && tailTicks >= length; } }
+		bool IsBeamComplete
+		{
+			get
+			{
+				return !isHeadTravelling && headTicks >= length && !isTailTravelling && tailTicks >= length;
+			}
+		}
 
 		public AreaBeam(AreaBeamInfo info, ProjectileArgs args, Color color)
 		{

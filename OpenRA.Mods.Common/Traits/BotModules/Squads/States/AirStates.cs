@@ -114,13 +114,13 @@ namespace OpenRA.Mods.Common.Traits.BotModules.Squads
 		protected static bool FullAmmo(Actor a)
 		{
 			var ammoPools = a.TraitsImplementing<AmmoPool>();
-			return ammoPools.All(x => x.FullAmmo());
+			return ammoPools.All(x => x.HasFullAmmo);
 		}
 
 		protected static bool HasAmmo(Actor a)
 		{
 			var ammoPools = a.TraitsImplementing<AmmoPool>();
-			return ammoPools.All(x => x.HasAmmo());
+			return ammoPools.All(x => x.HasAmmo);
 		}
 
 		protected static bool ReloadsAutomatically(Actor a)
@@ -140,7 +140,7 @@ namespace OpenRA.Mods.Common.Traits.BotModules.Squads
 
 			var activity = a.CurrentActivity;
 			var type = activity.GetType();
-			if (type == typeof(Rearm) || type == typeof(ResupplyAircraft))
+			if (type == typeof(Resupply))
 				return true;
 
 			var next = activity.NextActivity;
@@ -148,7 +148,7 @@ namespace OpenRA.Mods.Common.Traits.BotModules.Squads
 				return false;
 
 			var nextType = next.GetType();
-			if (nextType == typeof(Rearm) || nextType == typeof(ResupplyAircraft))
+			if (nextType == typeof(Resupply))
 				return true;
 
 			return false;
@@ -157,7 +157,7 @@ namespace OpenRA.Mods.Common.Traits.BotModules.Squads
 		// Checks the number of anti air enemies around units
 		protected virtual bool ShouldFlee(Squad owner)
 		{
-			return base.ShouldFlee(owner, enemies => CountAntiAirUnits(enemies) * MissileUnitMultiplier > owner.Units.Count);
+			return ShouldFlee(owner, enemies => CountAntiAirUnits(enemies) * MissileUnitMultiplier > owner.Units.Count);
 		}
 	}
 

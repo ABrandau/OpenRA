@@ -44,17 +44,11 @@ namespace OpenRA.Traits
 				else
 					start = current;
 
-				if (act == prev || act == prev.ParentActivity)
+				if (act == prev)
 					break;
 			}
 
 			return act;
-		}
-
-		public static Activity SequenceActivities(Actor self, params Activity[] acts)
-		{
-			return acts.Reverse().Aggregate(
-				(next, a) => { a.Queue(self, next); return a; });
 		}
 	}
 }

@@ -19,7 +19,7 @@ namespace OpenRA.Traits
 	public struct Target
 	{
 		public static readonly Target[] None = { };
-		public static readonly Target Invalid = new Target();
+		public static readonly Target Invalid = default(Target);
 
 		readonly TargetType type;
 		readonly Actor actor;
@@ -185,7 +185,8 @@ namespace OpenRA.Traits
 					case TargetType.Actor:
 						return actor.GetTargetablePositions();
 					case TargetType.FrozenActor:
-						return frozen.TargetablePositions;
+						// TargetablePositions may be null if it is Invalid
+						return frozen.TargetablePositions ?? NoPositions;
 					case TargetType.Terrain:
 						return terrainPositions;
 					default:

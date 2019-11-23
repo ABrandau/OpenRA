@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using OpenRA.Activities;
 using OpenRA.Mods.Common.Traits;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Activities
@@ -45,37 +46,49 @@ namespace OpenRA.Mods.Common.Activities
 			EndDrag = refinery.CenterPosition + DragOffset;
 		}
 
-		public override Activity Tick(Actor self)
+		public override bool Tick(Actor self)
 		{
 			switch (dockingState)
 			{
 				case DockingState.Wait:
-					return this;
+					return false;
+
 				case DockingState.Turn:
 					dockingState = DockingState.Dock;
+					QueueChild(new Turn(self, DockAngle));
 					if (IsDragRequired)
-						return ActivityUtils.SequenceActivities(self, new Turn(self, DockAngle), new Drag(self, StartDrag, EndDrag, DragLength), this);
-					return ActivityUtils.SequenceActivities(self, new Turn(self, DockAngle), this);
+						QueueChild(new Drag(self, StartDrag, EndDrag, DragLength));
+					return false;
+
 				case DockingState.Dock:
 					if (Refinery.IsInWorld && !Refinery.IsDead)
 						foreach (var nd in Refinery.TraitsImplementing<INotifyDocking>())
 							nd.Docked(Refinery, self);
-					return OnStateDock(self);
+
+					OnStateDock(self);
+					return false;
+
 				case DockingState.Loop:
 					if (!Refinery.IsInWorld || Refinery.IsDead || Harv.TickUnload(self, Refinery))
 						dockingState = DockingState.Undock;
-					return this;
+
+					return false;
+
 				case DockingState.Undock:
-					return OnStateUndock(self);
+					OnStateUndock(self);
+					return false;
+
 				case DockingState.Complete:
 					if (Refinery.IsInWorld && !Refinery.IsDead)
 						foreach (var nd in Refinery.TraitsImplementing<INotifyDocking>())
 							nd.Undocked(Refinery, self);
+
 					Harv.LastLinkedProc = Harv.LinkedProc;
 					Harv.LinkProc(self, null);
 					if (IsDragRequired)
-						return ActivityUtils.SequenceActivities(self, new Drag(self, EndDrag, StartDrag, DragLength), NextActivity);
-					return NextActivity;
+						QueueChild(new Drag(self, EndDrag, StartDrag, DragLength));
+
+					return true;
 			}
 
 			throw new InvalidOperationException("Invalid harvester dock state");
@@ -92,8 +105,13 @@ namespace OpenRA.Mods.Common.Activities
 			yield return Target.FromActor(Refinery);
 		}
 
-		public abstract Activity OnStateDock(Actor self);
+		public override IEnumerable<TargetLineNode> TargetLineNodes(Actor self)
+		{
+			yield return new TargetLineNode(Target.FromActor(Refinery), Color.Green);
+		}
 
-		public abstract Activity OnStateUndock(Actor self);
+		public abstract void OnStateDock(Actor self);
+
+		public abstract void OnStateUndock(Actor self);
 	}
 }

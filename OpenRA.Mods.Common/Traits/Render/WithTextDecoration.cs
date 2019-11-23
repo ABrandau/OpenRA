@@ -21,7 +21,9 @@ namespace OpenRA.Mods.Common.Traits.Render
 	[Desc("Displays a text overlay relative to the selection box.")]
 	public class WithTextDecorationInfo : ConditionalTraitInfo, Requires<IDecorationBoundsInfo>
 	{
-		[FieldLoader.Require] [Translate] public readonly string Text = null;
+		[Translate]
+		[FieldLoader.Require]
+		public readonly string Text = null;
 
 		public readonly string Font = "TinyBold";
 
@@ -48,14 +50,14 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 		public override void RulesetLoaded(Ruleset rules, ActorInfo ai)
 		{
-			if (!Game.ModData.Manifest.Fonts.ContainsKey(Font))
+			if (!Game.ModData.Manifest.Get<Fonts>().FontList.ContainsKey(Font))
 				throw new YamlException("Font '{0}' is not listed in the mod.yaml's Fonts section".F(Font));
 
 			base.RulesetLoaded(rules, ai);
 		}
 	}
 
-	public class WithTextDecoration : ConditionalTrait<WithTextDecorationInfo>, IRender, IRenderAboveShroudWhenSelected, INotifyOwnerChanged
+	public class WithTextDecoration : ConditionalTrait<WithTextDecorationInfo>, IRender, IRenderAnnotationsWhenSelected, INotifyOwnerChanged
 	{
 		readonly SpriteFont font;
 		readonly IDecorationBounds[] decorationBounds;
@@ -82,12 +84,12 @@ namespace OpenRA.Mods.Common.Traits.Render
 			yield break;
 		}
 
-		IEnumerable<IRenderable> IRenderAboveShroudWhenSelected.RenderAboveShroud(Actor self, WorldRenderer wr)
+		IEnumerable<IRenderable> IRenderAnnotationsWhenSelected.RenderAnnotations(Actor self, WorldRenderer wr)
 		{
 			return Info.RequiresSelection ? RenderInner(self, wr) : SpriteRenderable.None;
 		}
 
-		bool IRenderAboveShroudWhenSelected.SpatiallyPartitionable { get { return true; } }
+		bool IRenderAnnotationsWhenSelected.SpatiallyPartitionable { get { return true; } }
 
 		IEnumerable<IRenderable> RenderInner(Actor self, WorldRenderer wr)
 		{
@@ -108,7 +110,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 			var halfSize = font.Measure(Info.Text) / 2;
 
 			var boundsOffset = new int2(bounds.Left + bounds.Right, bounds.Top + bounds.Bottom) / 2;
-			var sizeOffset = new int2();
+			var sizeOffset = int2.Zero;
 			if (Info.ReferencePoint.HasFlag(ReferencePoints.Top))
 			{
 				boundsOffset -= new int2(0, bounds.Height / 2);
@@ -131,7 +133,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 				sizeOffset -= new int2(halfSize.X, 0);
 			}
 
-			return new IRenderable[] { new TextRenderable(font, wr.ProjectedPosition(boundsOffset + sizeOffset), Info.ZOffset, color, Info.Text) };
+			return new IRenderable[] { new TextAnnotationRenderable(font, wr.ProjectedPosition(boundsOffset + sizeOffset), Info.ZOffset, color, Info.Text) };
 		}
 
 		void INotifyOwnerChanged.OnOwnerChanged(Actor self, Player oldOwner, Player newOwner)

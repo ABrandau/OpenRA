@@ -9,6 +9,7 @@
  */
 #endregion
 
+using System.Collections.Generic;
 using OpenRA.Activities;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Mods.Common.Traits.Render;
@@ -36,30 +37,21 @@ namespace OpenRA.Mods.Common.Activities
 		protected override void OnFirstRun(Actor self)
 		{
 			if (self.Info.HasTraitInfo<IFacingInfo>())
-				QueueChild(self, new Turn(self, Facing));
+				QueueChild(new Turn(self, Facing));
 
 			if (self.Info.HasTraitInfo<AircraftInfo>())
-				QueueChild(self, new HeliLand(self, true));
+				QueueChild(new Land(self));
 		}
 
-		public override Activity Tick(Actor self)
+		public override bool Tick(Actor self)
 		{
 			if (IsCanceling)
-				return NextActivity;
-
-			if (ChildActivity != null)
-			{
-				ActivityUtils.RunActivity(self, ChildActivity);
-				return this;
-			}
+				return true;
 
 			// Prevent deployment in bogus locations
 			var transforms = self.TraitOrDefault<Transforms>();
 			if (transforms != null && !transforms.CanDeploy())
-			{
-				Cancel(self, true);
-				return NextActivity;
-			}
+				return true;
 
 			foreach (var nt in self.TraitsImplementing<INotifyTransform>())
 				nt.BeforeTransform(self);
@@ -71,22 +63,21 @@ namespace OpenRA.Mods.Common.Activities
 				IsInterruptible = false;
 
 				// Wait forever
-				QueueChild(self, new WaitFor(() => false));
+				QueueChild(new WaitFor(() => false));
 				makeAnimation.Reverse(self, () => DoTransform(self));
-				return this;
+				return false;
 			}
 
-			return NextActivity;
-		}
-
-		protected override void OnLastRun(Actor self)
-		{
-			if (!IsCanceling)
-				DoTransform(self);
+			DoTransform(self);
+			return true;
 		}
 
 		void DoTransform(Actor self)
 		{
+			// This activity may be buried as a child within one or more parents
+			// We need to consider the top-level activities when transferring orders to the new actor!
+			var currentActivity = self.CurrentActivity;
+
 			self.World.AddFrameEndTask(w =>
 			{
 				if (self.IsDead || self.WillDispose)
@@ -132,6 +123,17 @@ namespace OpenRA.Mods.Common.Activities
 				foreach (var nt in self.TraitsImplementing<INotifyTransform>())
 					nt.AfterTransform(a);
 
+				// Use self.CurrentActivity to capture the parent activity if Transform is a child
+				foreach (var transfer in currentActivity.ActivitiesImplementing<IssueOrderAfterTransform>(false))
+				{
+					if (transfer.IsCanceling)
+						continue;
+
+					var order = transfer.IssueOrderForTransformedActor(a);
+					foreach (var t in a.TraitsImplementing<IResolveOrder>())
+						t.ResolveOrder(a, order);
+				}
+
 				self.ReplacedByActor = a;
 
 				if (selected)
@@ -140,6 +142,31 @@ namespace OpenRA.Mods.Common.Activities
 				if (controlgroup.HasValue)
 					w.Selection.AddToControlGroup(a, controlgroup.Value);
 			});
+		}
+	}
+
+	class IssueOrderAfterTransform : Activity
+	{
+		readonly string orderString;
+		readonly Target target;
+		readonly Color? targetLineColor;
+
+		public IssueOrderAfterTransform(string orderString, Target target, Color? targetLineColor = null)
+		{
+			this.orderString = orderString;
+			this.target = target;
+			this.targetLineColor = targetLineColor;
+		}
+
+		public Order IssueOrderForTransformedActor(Actor newActor)
+		{
+			return new Order(orderString, newActor, target, true);
+		}
+
+		public override IEnumerable<TargetLineNode> TargetLineNodes(Actor self)
+		{
+			if (targetLineColor != null)
+				yield return new TargetLineNode(target, targetLineColor.Value);
 		}
 	}
 }

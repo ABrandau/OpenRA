@@ -21,7 +21,8 @@ namespace OpenRA.Mods.Cnc.Traits
 	[Desc("Transform into a different actor type.")]
 	class InfiltrateForTransformInfo : ITraitInfo
 	{
-		[ActorReference, FieldLoader.Require]
+		[ActorReference]
+		[FieldLoader.Require]
 		public readonly string IntoActor = null;
 
 		public readonly int ForceHealthPercentage = 0;
@@ -60,8 +61,7 @@ namespace OpenRA.Mods.Cnc.Traits
 			if (facing != null)
 				transform.Facing = facing.Facing;
 
-			self.CancelActivity();
-			self.QueueActivity(transform);
+			self.QueueActivity(false, transform);
 		}
 	}
 }

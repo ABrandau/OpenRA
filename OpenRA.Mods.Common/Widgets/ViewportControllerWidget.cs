@@ -218,6 +218,7 @@ namespace OpenRA.Mods.Common.Widgets
 		{
 			TooltipType = WorldTooltipType.None;
 			ActorTooltipExtra = null;
+			var modifiers = Game.GetModifierKeys();
 			var cell = worldRenderer.Viewport.ViewToWorld(Viewport.LastMousePos);
 			if (!world.Map.Contains(cell))
 				return;
@@ -231,7 +232,7 @@ namespace OpenRA.Mods.Common.Widgets
 			var worldPixel = worldRenderer.Viewport.ViewToWorldPx(Viewport.LastMousePos);
 			var underCursor = world.ScreenMap.ActorsAtMouse(worldPixel)
 				.Where(a => a.Actor.Info.HasTraitInfo<ITooltipInfo>() && !world.FogObscures(a.Actor))
-				.WithHighestSelectionPriority(worldPixel);
+				.WithHighestSelectionPriority(worldPixel, modifiers);
 
 			if (underCursor != null)
 			{
@@ -247,7 +248,7 @@ namespace OpenRA.Mods.Common.Widgets
 
 			var frozen = world.ScreenMap.FrozenActorsAtMouse(world.RenderPlayer, worldPixel)
 				.Where(a => a.TooltipInfo != null && a.IsValid && a.Visible && !a.Hidden)
-				.WithHighestSelectionPriority(worldPixel);
+				.WithHighestSelectionPriority(worldPixel, modifiers);
 
 			if (frozen != null)
 			{
@@ -336,7 +337,7 @@ namespace OpenRA.Mods.Common.Widgets
 			if (mi.Event == MouseInputEvent.Scroll &&
 				Game.Settings.Game.AllowZoom && mi.Modifiers.HasModifier(Game.Settings.Game.ZoomModifier))
 			{
-				Zoom(mi.ScrollDelta);
+				Zoom(mi.Delta.Y);
 				return true;
 			}
 
@@ -495,7 +496,7 @@ namespace OpenRA.Mods.Common.Widgets
 				}
 			}
 
-			return false;
+			return world.OrderGenerator.HandleKeyPress(e);
 		}
 
 		ScrollDirection CheckForDirections()

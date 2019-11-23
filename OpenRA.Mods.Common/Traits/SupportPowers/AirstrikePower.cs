@@ -36,6 +36,15 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Amount of time to keep the camera alive after the aircraft have finished attacking")]
 		public readonly int CameraRemoveDelay = 25;
 
+		[Desc("Enables the player directional targeting")]
+		public readonly bool UseDirectionalTarget = false;
+
+		[Desc("Animation used to render the direction arrows.")]
+		public readonly string DirectionArrowAnimation = null;
+
+		[Desc("Palette for direction cursor animation.")]
+		public readonly string DirectionArrowPalette = "chrome";
+
 		[Desc("Weapon range offset to apply during the beacon clock calculation")]
 		public readonly WDist BeaconDistanceOffset = WDist.FromCells(6);
 
@@ -52,11 +61,24 @@ namespace OpenRA.Mods.Common.Traits
 			this.info = info;
 		}
 
+		public override void SelectTarget(Actor self, string order, SupportPowerManager manager)
+		{
+			if (info.UseDirectionalTarget)
+			{
+				Game.Sound.PlayToPlayer(SoundType.UI, manager.Self.Owner, Info.SelectTargetSound);
+				Game.Sound.PlayNotification(self.World.Map.Rules, self.Owner, "Speech",
+					Info.SelectTargetSpeechNotification, self.Owner.Faction.InternalName);
+
+				self.World.OrderGenerator = new SelectDirectionalTarget(self.World, order, manager, Info.Cursor, info.DirectionArrowAnimation, info.DirectionArrowPalette);
+			}
+			else
+				base.SelectTarget(self, order, manager);
+		}
+
 		public override void Activate(Actor self, Order order, SupportPowerManager manager)
 		{
 			base.Activate(self, order, manager);
-
-			SendAirstrike(self, order.Target.CenterPosition);
+			SendAirstrike(self, order.Target.CenterPosition, !info.UseDirectionalTarget || order.ExtraData == uint.MaxValue, (int)order.ExtraData);
 		}
 
 		public void SendAirstrike(Actor self, WPos target, bool randomize = true, int attackFacing = 0)
@@ -78,7 +100,7 @@ namespace OpenRA.Mods.Common.Traits
 			Action<Actor> onEnterRange = a =>
 			{
 				// Spawn a camera and remove the beacon when the first plane enters the target area
-				if (info.CameraActor != null && !aircraftInRange.Any(kv => kv.Value))
+				if (info.CameraActor != null && camera == null && !aircraftInRange.Any(kv => kv.Value))
 				{
 					self.World.AddFrameEndTask(w =>
 					{
@@ -166,6 +188,7 @@ namespace OpenRA.Mods.Common.Traits
 						Info.BeaconImage,
 						Info.BeaconPoster,
 						Info.BeaconPosterPalette,
+						Info.BeaconSequence,
 						Info.ArrowSequence,
 						Info.CircleSequence,
 						Info.ClockSequence,

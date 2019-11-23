@@ -33,6 +33,9 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("How long to show the cash tick indicator when enabled.")]
 		public readonly int DisplayDuration = 30;
 
+		[Desc("Use resource storage for cash granted.")]
+		public readonly bool UseResourceStorage = false;
+
 		public override object Create(ActorInitializer init) { return new CashTrickler(this); }
 	}
 
@@ -40,7 +43,8 @@ namespace OpenRA.Mods.Common.Traits
 	{
 		readonly CashTricklerInfo info;
 		PlayerResources resources;
-		[Sync] public int Ticks { get; private set; }
+		[Sync]
+		public int Ticks { get; private set; }
 
 		public CashTrickler(CashTricklerInfo info)
 			: base(info)
@@ -86,7 +90,14 @@ namespace OpenRA.Mods.Common.Traits
 
 		void ModifyCash(Actor self, Player newOwner, int amount)
 		{
-			amount = resources.ChangeCash(amount);
+			if (info.UseResourceStorage)
+			{
+				var initialAmount = resources.Resources;
+				resources.GiveResources(amount);
+				amount = resources.Resources - initialAmount;
+			}
+			else
+				amount = resources.ChangeCash(amount);
 
 			if (info.ShowTicks && amount != 0)
 				AddCashTick(self, amount);

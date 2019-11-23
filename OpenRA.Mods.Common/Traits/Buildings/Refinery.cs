@@ -52,17 +52,22 @@ namespace OpenRA.Mods.Common.Traits
 		public virtual object Create(ActorInitializer init) { return new Refinery(init.Self, this); }
 	}
 
-	public class Refinery : ITick, IAcceptResources, INotifySold, INotifyCapture, INotifyOwnerChanged, ISync, INotifyActorDisposing
+	public class Refinery : INotifyCreated, ITick, IAcceptResources, INotifySold, INotifyCapture,
+		INotifyOwnerChanged, ISync, INotifyActorDisposing
 	{
 		readonly Actor self;
 		readonly RefineryInfo info;
 		PlayerResources playerResources;
+		RefineryResourceMultiplier[] resourceMultipliers;
 
 		int currentDisplayTick = 0;
 		int currentDisplayValue = 0;
 
-		[Sync] Actor dockedHarv = null;
-		[Sync] bool preventDock = false;
+		[Sync]
+		Actor dockedHarv = null;
+
+		[Sync]
+		bool preventDock = false;
 
 		public bool AllowDocking { get { return !preventDock; } }
 		public CVec DeliveryOffset { get { return info.DockOffset; } }
@@ -77,6 +82,11 @@ namespace OpenRA.Mods.Common.Traits
 			this.info = info;
 			playerResources = self.Owner.PlayerActor.Trait<PlayerResources>();
 			currentDisplayTick = info.TickRate;
+		}
+
+		void INotifyCreated.Created(Actor self)
+		{
+			resourceMultipliers = self.TraitsImplementing<RefineryResourceMultiplier>().ToArray();
 		}
 
 		public virtual Activity DockSequence(Actor harv, Actor self)
@@ -94,6 +104,8 @@ namespace OpenRA.Mods.Common.Traits
 
 		public void GiveResource(int amount)
 		{
+			amount = Util.ApplyPercentageModifiers(amount, resourceMultipliers.Select(m => m.GetModifier()));
+
 			if (info.UseStorage)
 			{
 				if (info.DiscardExcessResources)
@@ -104,11 +116,20 @@ namespace OpenRA.Mods.Common.Traits
 			else
 				amount = playerResources.ChangeCash(amount);
 
+			foreach (var notify in self.World.ActorsWithTrait<INotifyResourceAccepted>())
+			{
+				if (notify.Actor.Owner != self.Owner)
+					continue;
+
+				notify.Trait.OnResourceAccepted(notify.Actor, self, amount);
+			}
+
+			foreach (var rrd in refineryResourceDelivereds)
+				rrd.ResourceGiven(self, amount);
+
 			var purifiers = self.World.ActorsWithTrait<IResourcePurifier>().Where(x => x.Actor.Owner == self.Owner).Select(x => x.Trait);
 			foreach (var p in purifiers)
-			{
 				p.RefineAmount(amount);
-			}
 
 			if (info.ShowTicks)
 				currentDisplayValue += amount;
@@ -117,10 +138,6 @@ namespace OpenRA.Mods.Common.Traits
 		void CancelDock(Actor self)
 		{
 			preventDock = true;
-
-			// Cancel the dock sequence
-			if (dockedHarv != null && !dockedHarv.IsDead)
-				dockedHarv.CancelActivity();
 		}
 
 		void ITick.Tick(Actor self)
@@ -150,12 +167,10 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			if (!preventDock)
 			{
-				dockOrder.Queue(self, new CallFunc(() => dockedHarv = harv, false));
-				dockOrder.Queue(self, DockSequence(harv, self));
-				dockOrder.Queue(self, new CallFunc(() => dockedHarv = null, false));
+				dockOrder.QueueChild(new CallFunc(() => dockedHarv = harv, false));
+				dockOrder.QueueChild(DockSequence(harv, self));
+				dockOrder.QueueChild(new CallFunc(() => dockedHarv = null, false));
 			}
-
-			dockOrder.Queue(self, new CallFunc(() => harv.Trait<Harvester>().ContinueHarvesting(harv)));
 		}
 
 		void INotifyOwnerChanged.OnOwnerChanged(Actor self, Player oldOwner, Player newOwner)

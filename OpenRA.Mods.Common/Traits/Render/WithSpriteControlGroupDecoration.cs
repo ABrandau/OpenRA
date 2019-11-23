@@ -19,12 +19,14 @@ namespace OpenRA.Mods.Common.Traits.Render
 	[Desc("Renders Ctrl groups using pixel art.")]
 	public class WithSpriteControlGroupDecorationInfo : ITraitInfo, Requires<IDecorationBoundsInfo>
 	{
-		[PaletteReference] public readonly string Palette = "chrome";
+		[PaletteReference]
+		public readonly string Palette = "chrome";
 
 		public readonly string Image = "pips";
 
+		[SequenceReference("Image")]
 		[Desc("Sprite sequence used to render the control group 0-9 numbers.")]
-		[SequenceReference("Image")] public readonly string GroupSequence = "groups";
+		public readonly string GroupSequence = "groups";
 
 		[Desc("Point in the actor's selection box used as reference for offsetting the decoration image. " +
 			"Possible values are combinations of Center, Top, Bottom, Left, Right.")]
@@ -33,7 +35,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 		public object Create(ActorInitializer init) { return new WithSpriteControlGroupDecoration(init.Self, this); }
 	}
 
-	public class WithSpriteControlGroupDecoration : IRenderAboveShroudWhenSelected
+	public class WithSpriteControlGroupDecoration : IRenderAnnotationsWhenSelected
 	{
 		public readonly WithSpriteControlGroupDecorationInfo Info;
 		readonly IDecorationBounds[] decorationBounds;
@@ -47,7 +49,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 			pipImages = new Animation(self.World, Info.Image);
 		}
 
-		IEnumerable<IRenderable> IRenderAboveShroudWhenSelected.RenderAboveShroud(Actor self, WorldRenderer wr)
+		IEnumerable<IRenderable> IRenderAnnotationsWhenSelected.RenderAnnotations(Actor self, WorldRenderer wr)
 		{
 			if (self.Owner != wr.World.LocalPlayer)
 				yield break;
@@ -60,7 +62,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 				yield return r;
 		}
 
-		bool IRenderAboveShroudWhenSelected.SpatiallyPartitionable { get { return true; } }
+		bool IRenderAnnotationsWhenSelected.SpatiallyPartitionable { get { return true; } }
 
 		IEnumerable<IRenderable> DrawControlGroup(Actor self, WorldRenderer wr, PaletteReference palette)
 		{

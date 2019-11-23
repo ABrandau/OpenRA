@@ -195,7 +195,16 @@ namespace OpenRA.Mods.Common.Scripting
 				return;
 
 			var c = color.HasValue ? color.Value : Color.White;
-			Game.AddChatLine(c, prefix, text);
+			Game.AddChatLine(prefix, c, text);
+		}
+
+		[Desc("Display a system message to the player.")]
+		public void DisplaySystemMessage(string text, string prefix = "Mission")
+		{
+			if (string.IsNullOrEmpty(text))
+				return;
+
+			Game.AddSystemLine(prefix, text);
 		}
 
 		[Desc("Displays a debug message to the player, if \"Show Map Debug Messages\" is checked in the settings.")]

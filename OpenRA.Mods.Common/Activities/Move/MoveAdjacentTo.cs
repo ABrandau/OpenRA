@@ -40,7 +40,6 @@ namespace OpenRA.Mods.Common.Activities
 		Target lastVisibleTarget;
 		protected CPos lastVisibleTargetLocation;
 		bool useLastVisibleTarget;
-		bool repath;
 
 		public MoveAdjacentTo(Actor self, Target target, WPos? initialTargetPosition = null, Color? targetLineColor = null)
 		{
@@ -49,6 +48,7 @@ namespace OpenRA.Mods.Common.Activities
 			Mobile = self.Trait<Mobile>();
 			pathFinder = self.World.WorldActor.Trait<IPathFinder>();
 			domainIndex = self.World.WorldActor.Trait<DomainIndex>();
+			ChildHasPriority = false;
 
 			// The target may become hidden between the initial order request and the first tick (e.g. if queued)
 			// Moving to any position (even if quite stale) is still better than immediately giving up
@@ -63,8 +63,6 @@ namespace OpenRA.Mods.Common.Activities
 				lastVisibleTarget = Target.FromPos(initialTargetPosition.Value);
 				lastVisibleTargetLocation = self.World.Map.CellContaining(initialTargetPosition.Value);
 			}
-
-			repath = true;
 		}
 
 		protected virtual bool ShouldStop(Actor self)
@@ -82,7 +80,12 @@ namespace OpenRA.Mods.Common.Activities
 			return Util.AdjacentCells(self.World, Target);
 		}
 
-		public override Activity Tick(Actor self)
+		protected override void OnFirstRun(Actor self)
+		{
+			QueueChild(Mobile.MoveTo(check => CalculatePathToTarget(self, check)));
+		}
+
+		public override bool Tick(Actor self)
 		{
 			bool targetIsHiddenActor;
 			var oldTargetLocation = lastVisibleTargetLocation;
@@ -96,48 +99,27 @@ namespace OpenRA.Mods.Common.Activities
 			// Target is equivalent to checkTarget variable in other activities
 			// value is either lastVisibleTarget or target based on visibility and validity
 			var targetIsValid = Target.IsValidFor(self);
-			var oldUseLastVisibleTarget = useLastVisibleTarget;
 			useLastVisibleTarget = targetIsHiddenActor || !targetIsValid;
-
-			// Update target lines if required
-			if (useLastVisibleTarget != oldUseLastVisibleTarget && targetLineColor.HasValue)
-				self.SetTargetLine(useLastVisibleTarget ? lastVisibleTarget : target, targetLineColor.Value, false);
 
 			// Target is hidden or dead, and we don't have a fallback position to move towards
 			var noTarget = useLastVisibleTarget && !lastVisibleTarget.IsValidFor(self);
 
-			// Inner move order has completed.
-			if (ChildActivity == null)
-			{
-				// We are done here if the order was cancelled for any
-				// reason except the target moving.
-				if (IsCanceling || !repath || !targetIsValid)
-					return NextActivity;
-
-				// Target has moved, and MoveAdjacentTo is still valid.
-				ChildActivity = Mobile.MoveTo(() => CalculatePathToTarget(self));
-				repath = false;
-			}
-
 			// Cancel the current path if the activity asks to stop, or asks to repath
 			// The repath happens once the move activity stops in the next cell
-			var shouldStop = ShouldStop(self);
-			var shouldRepath = targetIsValid && !repath && ShouldRepath(self, oldTargetLocation);
-			if (shouldStop || shouldRepath || noTarget)
-			{
-				if (ChildActivity != null)
-					ChildActivity.Cancel(self);
+			var shouldRepath = targetIsValid && ShouldRepath(self, oldTargetLocation);
+			if (ChildActivity != null && (ShouldStop(self) || shouldRepath || noTarget))
+				ChildActivity.Cancel(self);
 
-				repath = shouldRepath;
-			}
+			// Target has moved, and MoveAdjacentTo is still valid.
+			if (!IsCanceling && shouldRepath)
+				QueueChild(Mobile.MoveTo(check => CalculatePathToTarget(self, check)));
 
-			// Ticks the inner move activity to actually move the actor.
-			ChildActivity = ActivityUtils.RunActivity(self, ChildActivity);
-
-			return this;
+			// The last queued childactivity is guaranteed to be the inner move, so if the childactivity
+			// queue is empty it means we have reached our destination.
+			return TickChild(self);
 		}
 
-		List<CPos> CalculatePathToTarget(Actor self)
+		List<CPos> CalculatePathToTarget(Actor self, BlockedByActor check)
 		{
 			var targetCells = CandidateMovementCells(self);
 			var searchCells = new List<CPos>();
@@ -150,8 +132,8 @@ namespace OpenRA.Mods.Common.Activities
 			if (!searchCells.Any())
 				return NoPath;
 
-			using (var fromSrc = PathSearch.FromPoints(self.World, Mobile.Info.LocomotorInfo, self, searchCells, loc, true))
-			using (var fromDest = PathSearch.FromPoint(self.World, Mobile.Info.LocomotorInfo, self, loc, lastVisibleTargetLocation, true).Reverse())
+			using (var fromSrc = PathSearch.FromPoints(self.World, Mobile.Locomotor, self, searchCells, loc, check))
+			using (var fromDest = PathSearch.FromPoint(self.World, Mobile.Locomotor, self, loc, lastVisibleTargetLocation, check).Reverse())
 				return pathFinder.FindBidiPath(fromSrc, fromDest);
 		}
 
@@ -161,6 +143,12 @@ namespace OpenRA.Mods.Common.Activities
 				return ChildActivity.GetTargets(self);
 
 			return Target.None;
+		}
+
+		public override IEnumerable<TargetLineNode> TargetLineNodes(Actor self)
+		{
+			if (targetLineColor.HasValue)
+				yield return new TargetLineNode(useLastVisibleTarget ? lastVisibleTarget : target, targetLineColor.Value);
 		}
 	}
 }

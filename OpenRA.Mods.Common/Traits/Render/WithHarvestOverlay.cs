@@ -18,13 +18,15 @@ namespace OpenRA.Mods.Common.Traits.Render
 	[Desc("Displays an overlay whenever resources are harvested by the actor.")]
 	class WithHarvestOverlayInfo : ITraitInfo, Requires<RenderSpritesInfo>, Requires<BodyOrientationInfo>
 	{
+		[SequenceReference]
 		[Desc("Sequence name to use")]
-		[SequenceReference] public readonly string Sequence = "harvest";
+		public readonly string Sequence = "harvest";
 
 		[Desc("Position relative to body")]
 		public readonly WVec LocalOffset = WVec.Zero;
 
-		[PaletteReference] public readonly string Palette = "effect";
+		[PaletteReference]
+		public readonly string Palette = "effect";
 
 		public object Create(ActorInitializer init) { return new WithHarvestOverlay(init.Self, this); }
 	}
@@ -59,8 +61,8 @@ namespace OpenRA.Mods.Common.Traits.Render
 			anim.PlayThen(info.Sequence, () => visible = false);
 		}
 
-		void INotifyHarvesterAction.MovingToResources(Actor self, CPos targetCell, Activity next) { }
-		void INotifyHarvesterAction.MovingToRefinery(Actor self, Actor targetRefinery, Activity next) { }
+		void INotifyHarvesterAction.MovingToResources(Actor self, CPos targetCell) { }
+		void INotifyHarvesterAction.MovingToRefinery(Actor self, Actor targetRefinery) { }
 		void INotifyHarvesterAction.MovementCancelled(Actor self) { }
 		void INotifyHarvesterAction.Docked() { }
 		void INotifyHarvesterAction.Undocked() { }

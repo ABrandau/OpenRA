@@ -23,7 +23,7 @@ namespace OpenRA.Mods.Common.Activities
 		CaptureManager enterCaptureManager;
 
 		public CaptureActor(Actor self, Target target)
-			: base(self, target, Color.Red)
+			: base(self, target, Color.Crimson)
 		{
 			manager = self.Trait<CaptureManager>();
 		}
@@ -136,9 +136,10 @@ namespace OpenRA.Mods.Common.Activities
 			base.OnActorDispose(self);
 		}
 
-		protected override void OnCancel(Actor self)
+		public override void Cancel(Actor self, bool keepQueue = false)
 		{
 			CancelCapture(self);
+			base.Cancel(self, keepQueue);
 		}
 
 		void CancelCapture(Actor self)

@@ -19,49 +19,61 @@ namespace OpenRA.Mods.Common.Activities
 	{
 		readonly GrantConditionOnDeploy deploy;
 		readonly bool canTurn;
+		readonly bool moving;
 
-		public DeployForGrantedCondition(Actor self, GrantConditionOnDeploy deploy)
+		public DeployForGrantedCondition(Actor self, GrantConditionOnDeploy deploy, bool moving = false)
 		{
 			this.deploy = deploy;
+			this.moving = moving;
 			canTurn = self.Info.HasTraitInfo<IFacingInfo>();
 		}
 
 		protected override void OnFirstRun(Actor self)
 		{
 			// Turn to the required facing.
-			if (deploy.Info.Facing != -1 && canTurn)
-				QueueChild(self, new Turn(self, deploy.Info.Facing));
+			if (deploy.DeployState == DeployState.Undeployed && deploy.Info.Facing != -1 && canTurn && !moving)
+				QueueChild(new Turn(self, deploy.Info.Facing));
 		}
 
-		public override Activity Tick(Actor self)
+		public override bool Tick(Actor self)
 		{
-			// Do turn first, if needed.
-			if (ChildActivity != null)
-			{
-				ChildActivity = ActivityUtils.RunActivity(self, ChildActivity);
-				return this;
-			}
+			if (IsCanceling || (deploy.DeployState != DeployState.Deployed && moving))
+				return true;
 
-			// Without this, turn for facing deploy angle will be canceled and immediately deploy!
-			if (IsCanceling)
-				return NextActivity;
+			QueueChild(new DeployInner(self, deploy));
+			return true;
+		}
+	}
 
-			if (IsInterruptible)
-			{
-				IsInterruptible = false; // must DEPLOY from now.
-				deploy.Deploy();
-				return this;
-			}
+	public class DeployInner : Activity
+	{
+		readonly GrantConditionOnDeploy deployment;
+		bool initiated;
 
+		public DeployInner(Actor self, GrantConditionOnDeploy deployment)
+		{
+			this.deployment = deployment;
+
+			// Once deployment animation starts, the animation must finish.
+			IsInterruptible = false;
+		}
+
+		public override bool Tick(Actor self)
+		{
 			// Wait for deployment
-			if (deploy.DeployState == DeployState.Deploying)
-				return this;
+			if (deployment.DeployState == DeployState.Deploying || deployment.DeployState == DeployState.Undeploying)
+				return false;
 
-			// Failed or success, we are going to NextActivity.
-			// Deploy() at the first run would have put DeployState == Deploying so
-			// if we are back to DeployState.Undeployed, it means deploy failure.
-			// Parent activity will see the status and will take appropriate action.
-			return NextActivity;
+			if (initiated)
+				return true;
+
+			if (deployment.DeployState == DeployState.Undeployed)
+				deployment.Deploy();
+			else
+				deployment.Undeploy();
+
+			initiated = true;
+			return false;
 		}
 	}
 }

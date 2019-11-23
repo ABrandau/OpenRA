@@ -75,7 +75,7 @@ namespace OpenRA.Mods.Cnc.Traits
 			if (IsTraitDisabled)
 				return false;
 
-			var targetTypes = new BitSet<TargetableType>();
+			var targetTypes = default(BitSet<TargetableType>);
 			if (order.Target.Type == TargetType.FrozenActor)
 				targetTypes = order.Target.FrozenActor.TargetTypes;
 
@@ -114,11 +114,8 @@ namespace OpenRA.Mods.Cnc.Traits
 			if (!CanInfiltrateTarget(self, order.Target))
 				return;
 
-			if (!order.Queued)
-				self.CancelActivity();
-
-			self.SetTargetLine(order.Target, Color.Red);
-			self.QueueActivity(new Infiltrate(self, order.Target, this));
+			self.QueueActivity(order.Queued, new Infiltrate(self, order.Target, this));
+			self.ShowTargetLines();
 		}
 	}
 

@@ -185,16 +185,16 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			header.Get<LabelWidget>("LABEL").GetText = () => title;
 			missionList.AddChild(header);
 
-			foreach (var p in previews)
+			foreach (var preview in previews)
 			{
-				var preview = p;
-
 				var item = ScrollItemWidget.Setup(template,
 					() => selectedMap != null && selectedMap.Uid == preview.Uid,
 					() => SelectMap(preview),
 					StartMissionClicked);
 
-				item.Get<LabelWidget>("TITLE").GetText = () => preview.Title;
+				var label = item.Get<LabelWithTooltipWidget>("TITLE");
+				WidgetUtils.TruncateLabelToTooltip(label, preview.Title);
+
 				missionList.AddChild(item);
 			}
 		}

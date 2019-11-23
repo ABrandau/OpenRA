@@ -43,14 +43,13 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			var exit = CPos.Zero;
 			var exitLocation = CPos.Zero;
-			var target = Target.Invalid;
 
 			// Clone the initializer dictionary for the new actor
 			var td = new TypeDictionary();
 			foreach (var init in inits)
 				td.Add(init);
 
-			if (self.OccupiesSpace != null)
+			if (exitinfo != null && self.OccupiesSpace != null && producee.HasTraitInfo<IOccupySpaceInfo>())
 			{
 				exit = self.Location + exitinfo.ExitCell;
 				var spawn = self.CenterPosition + exitinfo.SpawnOffset;
@@ -70,11 +69,12 @@ namespace OpenRA.Mods.Common.Traits
 				}
 
 				exitLocation = rp.Value != null ? rp.Value.Location : exit;
-				target = Target.FromCell(self.World, exitLocation);
 
 				td.Add(new LocationInit(exit));
 				td.Add(new CenterPositionInit(spawn));
 				td.Add(new FacingInit(initialFacing));
+				if (exitinfo != null)
+					td.Add(new CreationActivityDelayInit(exitinfo.ExitDelay));
 			}
 
 			self.World.AddFrameEndTask(w =>
@@ -82,20 +82,8 @@ namespace OpenRA.Mods.Common.Traits
 				var newUnit = self.World.CreateActor(producee.Name, td);
 
 				var move = newUnit.TraitOrDefault<IMove>();
-				if (move != null)
-				{
-					if (exitinfo.MoveIntoWorld)
-					{
-						if (exitinfo.ExitDelay > 0)
-							newUnit.QueueActivity(new Wait(exitinfo.ExitDelay, false));
-
-						newUnit.QueueActivity(move.MoveIntoWorld(newUnit, exit));
-						newUnit.QueueActivity(new AttackMoveActivity(
-							newUnit, move.MoveTo(exitLocation, 1)));
-					}
-				}
-
-				newUnit.SetTargetLine(target, rp.Value != null ? Color.Red : Color.Green, false);
+				if (exitinfo != null && move != null)
+					newUnit.QueueActivity(new AttackMoveActivity(newUnit, () => move.MoveTo(exitLocation, 1, targetLineColor: Color.OrangeRed)));
 
 				if (!self.IsDead)
 					foreach (var t in self.TraitsImplementing<INotifyProduction>())
@@ -125,9 +113,9 @@ namespace OpenRA.Mods.Common.Traits
 			// Pick a spawn/exit point pair
 			var exit = SelectExit(self, producee, productionType);
 
-			if (exit != null || self.OccupiesSpace == null)
+			if (exit != null || self.OccupiesSpace == null || !producee.HasTraitInfo<IOccupySpaceInfo>())
 			{
-				DoProduction(self, producee, exit.Info, productionType, inits);
+				DoProduction(self, producee, exit == null ? null : exit.Info, productionType, inits);
 
 				return true;
 			}
@@ -142,7 +130,7 @@ namespace OpenRA.Mods.Common.Traits
 			self.NotifyBlocker(self.Location + s.ExitCell);
 
 			return mobileInfo == null ||
-				mobileInfo.CanEnterCell(self.World, self, self.Location + s.ExitCell, self);
+				mobileInfo.CanEnterCell(self.World, self, self.Location + s.ExitCell, ignoreActor: self);
 		}
 	}
 }

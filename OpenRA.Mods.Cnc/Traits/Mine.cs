@@ -58,6 +58,15 @@ namespace OpenRA.Mods.Cnc.Traits
 
 			return info.CrushClasses.Overlaps(crushClasses);
 		}
+
+		LongBitSet<PlayerBitMask> ICrushable.CrushableBy(Actor self, BitSet<CrushClass> crushClasses)
+		{
+			if (!info.CrushClasses.Overlaps(crushClasses))
+				return self.World.NoPlayersMask;
+
+			// Friendly units should move around!
+			return info.BlockFriendly ? self.Owner.EnemyPlayersMask : self.World.AllPlayersMask;
+		}
 	}
 
 	[Desc("Tag trait for stuff that should not trigger mines.")]

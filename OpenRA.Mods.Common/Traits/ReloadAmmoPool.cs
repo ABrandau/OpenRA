@@ -43,19 +43,23 @@ namespace OpenRA.Mods.Common.Traits
 		}
 	}
 
-	public class ReloadAmmoPool : PausableConditionalTrait<ReloadAmmoPoolInfo>, ITick, INotifyCreated, INotifyAttack, ISync
+	public class ReloadAmmoPool : PausableConditionalTrait<ReloadAmmoPoolInfo>, ITick, INotifyAttack, ISync
 	{
 		AmmoPool ammoPool;
+		IReloadAmmoModifier[] modifiers;
 
-		[Sync] int remainingTicks;
+		[Sync]
+		int remainingTicks;
 
 		public ReloadAmmoPool(ReloadAmmoPoolInfo info)
 			: base(info) { }
 
-		void INotifyCreated.Created(Actor self)
+		protected override void Created(Actor self)
 		{
 			ammoPool = self.TraitsImplementing<AmmoPool>().Single(ap => ap.Info.Name == Info.AmmoPool);
+			modifiers = self.TraitsImplementing<IReloadAmmoModifier>().ToArray();
 			remainingTicks = Info.Delay;
+			base.Created(self);
 		}
 
 		void INotifyAttack.Attacking(Actor self, Target target, Armament a, Barrel barrel)
@@ -76,9 +80,9 @@ namespace OpenRA.Mods.Common.Traits
 
 		protected virtual void Reload(Actor self, int reloadDelay, int reloadCount, string sound)
 		{
-			if (!ammoPool.FullAmmo() && --remainingTicks == 0)
+			if (!ammoPool.HasFullAmmo && --remainingTicks == 0)
 			{
-				remainingTicks = reloadDelay;
+				remainingTicks = Util.ApplyPercentageModifiers(reloadDelay, modifiers.Select(m => m.GetReloadAmmoModifier()));
 				if (!string.IsNullOrEmpty(sound))
 					Game.Sound.PlayToPlayer(SoundType.World, self.Owner, sound, self.CenterPosition);
 
