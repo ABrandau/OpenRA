@@ -14,7 +14,6 @@ using OpenRA.Mods.Common.Orders;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Traits;
 
-/* Works without base engine modification */
 namespace OpenRA.Mods.AS.Traits
 {
 	static class TeleportNetworkPrimaryExitExts
@@ -69,7 +68,7 @@ namespace OpenRA.Mods.AS.Traits
 		{
 			this.info = info;
 			var trait = self.Info.TraitInfoOrDefault<TeleportNetworkInfo>();
-			this.manager = self.Owner.PlayerActor.TraitsImplementing<TeleportNetworkManager>().Where(x => x.Type == trait.Type).First();
+			manager = self.Owner.PlayerActor.TraitsImplementing<TeleportNetworkManager>().Where(x => x.Type == trait.Type).First();
 		}
 
 		void INotifyCreated.Created(Actor self)
@@ -99,7 +98,7 @@ namespace OpenRA.Mods.AS.Traits
 
 		public void RevokePrimary(Actor self)
 		{
-			this.IsPrimary = false;
+			IsPrimary = false;
 
 			if (primaryToken != ConditionManager.InvalidConditionToken)
 				primaryToken = conditionManager.RevokeCondition(self, primaryToken);
@@ -107,7 +106,7 @@ namespace OpenRA.Mods.AS.Traits
 
 		public void SetPrimary(Actor self)
 		{
-			this.IsPrimary = true;
+			IsPrimary = true;
 
 			var pri = manager.PrimaryActor;
 			if (pri != null && !pri.IsDead)

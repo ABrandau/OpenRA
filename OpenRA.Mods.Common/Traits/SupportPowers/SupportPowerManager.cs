@@ -264,7 +264,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			if (power.Info.Cost != 0)
 			{
-				var player = manager.Self;
+				var player = Manager.Self;
 				var pr = player.Trait<PlayerResources>();
 				if (pr.Cash + pr.Resources < power.Info.Cost)
 				{

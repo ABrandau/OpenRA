@@ -350,7 +350,7 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 
 		void AssignSlaveActivity(Actor self)
 		{
-			if (self.CurrentActivity is Move || self.CurrentActivity is HeliFly)
+			if (self.CurrentActivity is Move || self.CurrentActivity is Fly)
 				MoveSlaves(self);
 			else if (self.CurrentActivity is AttackMoveActivity)
 				AttackMoveSlaves(self);

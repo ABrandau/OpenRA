@@ -35,7 +35,7 @@ namespace OpenRA.Mods.AS.Effects
 		{
 			this.info = info;
 			this.world = world;
-			this.owner = p;
+			owner = p;
 			this.pos = pos;
 			this.planes = planes;
 
@@ -49,12 +49,13 @@ namespace OpenRA.Mods.AS.Effects
 					info.BeaconPaletteIsPlayerPalette,
 					info.BeaconPalette,
 					info.BeaconImage,
+					info.BeaconSequence,
 					info.BeaconPoster,
 					info.BeaconPosterPalette,
 					info.ArrowSequence,
 					info.CircleSequence,
 					info.ClockSequence,
-						() => 1 - ((planes.First().OccupiesSpace.CenterPosition - pos).HorizontalLength - info.BeaconDistanceOffset.Length) * 1f / distance);
+					() => 1 - ((planes.First().OccupiesSpace.CenterPosition - pos).HorizontalLength - info.BeaconDistanceOffset.Length) * 1f / distance);
 
 				world.AddFrameEndTask(w => w.Add(beacon));
 			}

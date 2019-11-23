@@ -11,7 +11,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.GameRules;
-using OpenRA.Mods.Common;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Traits;
 
@@ -21,15 +20,22 @@ namespace OpenRA.Mods.AS.Warheads
 	[Desc("Allows to fire a a weapon to a directly specified target position relative to the warhead explosion.")]
 	public class FireFragmentWarhead : WarheadAS, IRulesetLoaded<WeaponInfo>
 	{
-		[WeaponReference, FieldLoader.Require]
+		[WeaponReference]
+		[FieldLoader.Require]
 		[Desc("Has to be defined in weapons.yaml as well.")]
 		public readonly string Weapon = null;
+
+		[Desc("Percentual chance the fragment is fired.")]
+		public readonly int Chance = 100;
 
 		[Desc("Target offset relative to warhead explosion.")]
 		public readonly WVec Offset = new WVec(0, 0, 0);
 
 		[Desc("If set, Offset's Z value will be used as absolute height instead of explosion height.")]
 		public readonly bool UseZOffsetAsAbsoluteHeight = false;
+
+		[Desc("Should the weapons be fired around the intended target or at the explosion's epicenter.")]
+		public readonly bool AroundTarget = false;
 
 		WeaponInfo weapon;
 
@@ -39,7 +45,7 @@ namespace OpenRA.Mods.AS.Warheads
 				throw new YamlException("Weapons Ruleset does not contain an entry '{0}'".F(Weapon.ToLowerInvariant()));
 		}
 
-		public override void DoImpact(Target target, Actor firedBy, IEnumerable<int> damageModifiers)
+		public override void DoImpact(Target target, Target guidedTarget, Actor firedBy, IEnumerable<int> damageModifiers)
 		{
 			if (!target.IsValidFor(firedBy))
 				return;
@@ -47,13 +53,20 @@ namespace OpenRA.Mods.AS.Warheads
 			var world = firedBy.World;
 			var map = world.Map;
 
+			if (Chance < world.SharedRandom.Next(100))
+				return;
+
 			if (!IsValidImpact(target.CenterPosition, firedBy))
 				return;
 
+			var epicenter = AroundTarget && guidedTarget.Type != TargetType.Invalid
+				? guidedTarget.CenterPosition
+				: target.CenterPosition;
+
 			var targetpos = UseZOffsetAsAbsoluteHeight
-				? new WPos(target.CenterPosition.X + Offset.X, target.CenterPosition.Y + Offset.Y,
-					map.CenterOfCell(map.CellContaining(target.CenterPosition)).Z + Offset.Z)
-				: target.CenterPosition + Offset;
+				? new WPos(epicenter.X + Offset.X, epicenter.Y + Offset.Y,
+					map.CenterOfCell(map.CellContaining(epicenter)).Z + Offset.Z)
+				: epicenter + Offset;
 
 			var fragmentTarget = Target.FromPos(targetpos);
 

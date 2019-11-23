@@ -1,23 +1,21 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
- * This file is part of OpenRA, which is free software. It is made
- * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version. For more
- * information, see COPYING.
+ * Copyright 2015- OpenRA.Mods.AS Developers (see AUTHORS)
+ * This file is a part of a third-party plugin for OpenRA, which is
+ * free software. It is made available to you under the terms of the
+ * GNU General Public License as published by the Free Software
+ * Foundation. For more information, see COPYING.
  */
 #endregion
 
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.GameRules;
-using OpenRA.Mods.Common.Traits;
 using OpenRA.Traits;
 
-namespace OpenRA.Mods.Common.Warheads
+namespace OpenRA.Mods.AS.Warheads
 {
-	public class FireClusterWarhead : Warhead, IRulesetLoaded<WeaponInfo>
+	public class FireClusterASWarhead : WarheadAS, IRulesetLoaded<WeaponInfo>
 	{
 		[WeaponReference]
 		[FieldLoader.Require]
@@ -32,9 +30,11 @@ namespace OpenRA.Mods.Common.Warheads
 		public readonly CVec Dimensions = CVec.Zero;
 
 		[FieldLoader.Require]
-		[Desc("Cluster footprint. Cells marked as X will be attacked.",
-			"Cells marked as x will be attacked randomly until RandomClusterCount is reached.")]
+		[Desc("Cluster footprint. Cells marked as x will be attacked.")]
 		public readonly string Footprint = string.Empty;
+
+		[Desc("Should the weapons be fired around the intended target or at the explosion's epicenter.")]
+		public readonly bool AroundTarget = false;
 
 		WeaponInfo weapon;
 
@@ -50,9 +50,16 @@ namespace OpenRA.Mods.Common.Warheads
 				return;
 
 			var map = firedBy.World.Map;
-			var targetCell = map.CellContaining(target.CenterPosition);
+
+			if (!IsValidImpact(target.CenterPosition, firedBy))
+				return;
+
+			var targetCell = AroundTarget && guidedTarget.Type != TargetType.Invalid
+				? map.CellContaining(guidedTarget.CenterPosition)
+				: map.CellContaining(target.CenterPosition);
 
 			var targetCells = CellsMatching(targetCell, false);
+
 			foreach (var c in targetCells)
 				FireProjectileAtCell(map, firedBy, target, c, damageModifiers);
 

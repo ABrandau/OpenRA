@@ -124,9 +124,6 @@ namespace OpenRA.Mods.Common.Traits
 				notify.Trait.OnResourceAccepted(notify.Actor, self, amount);
 			}
 
-			foreach (var rrd in refineryResourceDelivereds)
-				rrd.ResourceGiven(self, amount);
-
 			var purifiers = self.World.ActorsWithTrait<IResourcePurifier>().Where(x => x.Actor.Owner == self.Owner).Select(x => x.Trait);
 			foreach (var p in purifiers)
 				p.RefineAmount(amount);

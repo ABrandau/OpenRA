@@ -419,7 +419,6 @@ namespace OpenRA.Mods.Common.Traits
 	{
 		Order IssueDeployOrder(Actor self, bool queued);
 		bool CanIssueDeployOrder(Actor self);
-		Order IssueDeployOrder(Actor self);
 	}
 
 	public enum ActorPreviewType { PlaceBuilding, ColorPicker, MapEditorSidebar }

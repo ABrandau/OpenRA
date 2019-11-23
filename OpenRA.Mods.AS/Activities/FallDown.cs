@@ -9,7 +9,6 @@
 #endregion
 
 using OpenRA.Activities;
-using OpenRA.Mods.Common.Traits;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.AS.Activities
@@ -21,7 +20,6 @@ namespace OpenRA.Mods.AS.Activities
 
 		WPos dropPosition;
 		WPos currentPosition;
-		bool triggered = false;
 
 		public FallDown(Actor self, WPos dropPosition, int fallRate, Actor ignoreActor = null)
 		{
@@ -31,40 +29,28 @@ namespace OpenRA.Mods.AS.Activities
 			this.dropPosition = dropPosition;
 		}
 
-		Activity FirstTick(Actor self)
+		public override bool Tick(Actor self)
 		{
-			triggered = true;
-
-			// Place the actor and retrieve its visual position (CenterPosition)
-			pos.SetPosition(self, dropPosition);
-			currentPosition = self.CenterPosition;
-
-			return this;
-		}
-
-		Activity LastTick(Actor self)
-		{
-			var dat = self.World.Map.DistanceAboveTerrain(currentPosition);
-			pos.SetPosition(self, currentPosition - new WVec(WDist.Zero, WDist.Zero, dat));
-
-			return NextActivity;
-		}
-
-		public override Activity Tick(Actor self)
-		{
-			// If this is the first tick
-			if (!triggered)
-				return FirstTick(self);
-
 			currentPosition -= fallVector;
+			pos.SetVisualPosition(self, currentPosition);
 
 			// If the unit has landed, this will be the last tick
 			if (self.World.Map.DistanceAboveTerrain(currentPosition).Length <= 0)
-				return LastTick(self);
+			{
+				var dat = self.World.Map.DistanceAboveTerrain(currentPosition);
+				pos.SetPosition(self, currentPosition - new WVec(WDist.Zero, WDist.Zero, dat));
 
-			pos.SetVisualPosition(self, currentPosition);
+				return true;
+			}
 
-			return this;
+			return false;
+		}
+
+		protected override void OnFirstRun(Actor self)
+		{
+			// Place the actor and retrieve its visual position (CenterPosition)
+			pos.SetPosition(self, dropPosition);
+			currentPosition = self.CenterPosition;
 		}
 	}
 }

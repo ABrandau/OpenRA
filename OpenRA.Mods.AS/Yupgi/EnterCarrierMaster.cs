@@ -85,7 +85,5 @@ namespace OpenRA.Mods.Yupgi_alert.Activities
 							; // fill 'er up.
 			});
 		}
-
-
 	}
 }

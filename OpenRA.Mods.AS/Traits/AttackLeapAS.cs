@@ -34,7 +34,7 @@ namespace OpenRA.Mods.AS.Traits
 		public override object Create(ActorInitializer init) { return new AttackLeapAS(init.Self, this); }
 	}
 
-	class AttackLeapAS : AttackFrontal, INotifyCreated
+	class AttackLeapAS : AttackFrontal
 	{
 		readonly Barrel barrel;
 		public readonly AttackLeapASInfo LeapInfo;
@@ -45,7 +45,7 @@ namespace OpenRA.Mods.AS.Traits
 		public AttackLeapAS(Actor self, AttackLeapASInfo info)
 			: base(self, info)
 		{
-			this.LeapInfo = info;
+			LeapInfo = info;
 			barrel = new Barrel { Offset = WVec.Zero, Yaw = WAngle.Zero };
 		}
 
@@ -56,7 +56,7 @@ namespace OpenRA.Mods.AS.Traits
 			base.Created(self);
 		}
 
-		public override void DoAttack(Actor self, Target target, IEnumerable<Armament> armaments = null)
+		public override void DoAttack(Actor self, Target target)
 		{
 			if (target.Type != TargetType.Actor || !CanAttack(self, target))
 				return;

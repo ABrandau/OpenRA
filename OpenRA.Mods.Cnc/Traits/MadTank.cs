@@ -127,11 +127,6 @@ namespace OpenRA.Mods.Cnc.Traits
 			return new Order("Detonate", self, queued);
 		}
 
-		public Order IssueDeployOrder(Actor self)
-		{
-			return new Order("Detonate", self, false);
-		}
-
 		bool IIssueDeployOrder.CanIssueDeployOrder(Actor self) { return true; }
 
 		string IOrderVoice.VoicePhraseForOrder(Actor self, Order order)

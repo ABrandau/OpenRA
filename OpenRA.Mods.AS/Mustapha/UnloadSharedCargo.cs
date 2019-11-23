@@ -1,4 +1,4 @@
-﻿#region Copyright & License Information
+#region Copyright & License Information
 /*
  * Copyright 2007-2018 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
@@ -12,11 +12,14 @@
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Activities;
+using OpenRA.Mods.AS.Traits;
+using OpenRA.Mods.Common;
+using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Primitives;
 using OpenRA.Traits;
 
-namespace OpenRA.Mods.Common.Activities
+namespace OpenRA.Mods.AS.Activities
 {
 	public class UnloadSharedCargo : Activity
 	{
@@ -50,14 +53,14 @@ namespace OpenRA.Mods.Common.Activities
 
 			// Find the cells that are blocked by transient actors
 			return cargo.CurrentAdjacentCells
-				.Where(c => pos.CanEnterCell(c, null, true) != pos.CanEnterCell(c, null, false));
+				.Where(c => pos.CanEnterCell(c, null, BlockedByActor.All) != pos.CanEnterCell(c, null, BlockedByActor.None));
 		}
 
-		public override Activity Tick(Actor self)
+		public override bool Tick(Actor self)
 		{
 			cargo.Unloading = false;
 			if (IsCanceling || cargo.Manager.IsEmpty())
-				return NextActivity;
+				return true;
 
 			foreach (var inu in notifiers)
 				inu.Unloading(self);
@@ -69,8 +72,8 @@ namespace OpenRA.Mods.Common.Activities
 			if (exitSubCell == null)
 			{
 				self.NotifyBlocker(BlockedExitCells(actor));
-
-				return ActivityUtils.SequenceActivities(self, new Wait(10));
+				QueueChild(new Wait(10));
+				return false;
 			}
 
 			cargo.Unload(self);
@@ -82,18 +85,18 @@ namespace OpenRA.Mods.Common.Activities
 				var move = actor.Trait<IMove>();
 				var pos = actor.Trait<IPositionable>();
 
-				actor.CancelActivity();
+				pos.SetPosition(self, exitSubCell.Value.First, exitSubCell.Value.Second);
 				pos.SetVisualPosition(actor, spawn);
-				actor.QueueActivity(move.MoveIntoWorld(actor, exitSubCell.Value.First, exitSubCell.Value.Second));
-				actor.SetTargetLine(Target.FromCell(w, exitSubCell.Value.First, exitSubCell.Value.Second), Color.Green, false);
+
+				actor.CancelActivity();
 				w.Add(actor);
 			});
 
 			if (!unloadAll || cargo.Manager.IsEmpty())
-				return NextActivity;
+				return true;
 
 			cargo.Unloading = true;
-			return this;
+			return false;
 		}
 	}
 }

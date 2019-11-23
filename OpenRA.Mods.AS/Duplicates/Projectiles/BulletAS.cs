@@ -95,6 +95,9 @@ namespace OpenRA.Mods.AS.Projectiles
 		[Desc("Use the Player Palette to render the trail sequence.")]
 		public readonly bool TrailUsePlayerPalette = false;
 
+		[Desc("Type defined for point-defense logic.")]
+		public readonly string PointDefenseType = null;
+
 		public readonly int ContrailLength = 0;
 		public readonly int ContrailZOffset = 2047;
 		public readonly Color ContrailColor = Color.White;
@@ -110,20 +113,22 @@ namespace OpenRA.Mods.AS.Projectiles
 		readonly BulletASInfo info;
 		readonly ProjectileArgs args;
 		readonly Animation anim;
+
 		[Sync]
 		readonly WAngle angle;
 		[Sync]
 		readonly WDist speed;
+		[Sync]
+		readonly int facing;
+
+		readonly string trailPalette;
+		readonly string palette;
 
 		ContrailRenderable contrail;
-		string trailPalette;
-		string palette;
 
 		[Sync]
 		WPos pos, target, source;
 		int length;
-		[Sync]
-		int facing;
 		int ticks, smokeTicks;
 		int remainingBounces;
 
@@ -155,8 +160,8 @@ namespace OpenRA.Mods.AS.Projectiles
 			target = args.PassiveTarget;
 			if (info.Inaccuracy.Length > 0)
 			{
-				var inaccuracy = OpenRA.Mods.Common.Util.ApplyPercentageModifiers(info.Inaccuracy.Length, args.InaccuracyModifiers);
-				var range = OpenRA.Mods.Common.Util.ApplyPercentageModifiers(args.Weapon.Range.Length, args.RangeModifiers);
+				var inaccuracy = Common.Util.ApplyPercentageModifiers(info.Inaccuracy.Length, args.InaccuracyModifiers);
+				var range = Common.Util.ApplyPercentageModifiers(args.Weapon.Range.Length, args.RangeModifiers);
 				var maxOffset = inaccuracy * (target - pos).Length / range;
 				target += WVec.FromPDF(world.SharedRandom, 2) * maxOffset / 1024;
 			}
@@ -224,7 +229,7 @@ namespace OpenRA.Mods.AS.Projectiles
 			{
 				var delayedPos = WPos.LerpQuadratic(source, target, angle, ticks - info.TrailDelay, length);
 				world.AddFrameEndTask(w => w.Add(new SpriteEffect(delayedPos, w, info.TrailImage, info.TrailSequences.Random(world.SharedRandom),
-					trailPalette, false, false, GetEffectiveFacing())));
+					trailPalette, facing: GetEffectiveFacing())));
 
 				smokeTicks = info.TrailInterval;
 			}
@@ -256,6 +261,9 @@ namespace OpenRA.Mods.AS.Projectiles
 			// After first bounce, check for targets each tick
 			if (remainingBounces < info.BounceCount)
 				shouldExplode |= AnyValidTargetsInRadius(world, pos, info.Width, args.SourceActor, true);
+
+			if (!string.IsNullOrEmpty(info.PointDefenseType))
+				shouldExplode |= world.ActorsWithTrait<IPointDefense>().Any(x => x.Trait.Destroy(pos, args.SourceActor.Owner, info.PointDefenseType));
 
 			if (shouldExplode)
 				Explode(world);
@@ -292,7 +300,7 @@ namespace OpenRA.Mods.AS.Projectiles
 
 			world.AddFrameEndTask(w => w.Remove(this));
 
-			args.Weapon.Impact(Target.FromPos(pos), args.SourceActor, args.DamageModifiers);
+			args.Weapon.Impact(Target.FromPos(pos), args.GuidedTarget, args.SourceActor, args.DamageModifiers);
 		}
 
 		bool AnyValidTargetsInRadius(World world, WPos pos, WDist radius, Actor firedBy, bool checkTargetType)

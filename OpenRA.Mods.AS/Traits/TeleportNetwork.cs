@@ -8,8 +8,6 @@
  */
 #endregion
 
-using System;
-using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Traits;
 
@@ -37,7 +35,7 @@ namespace OpenRA.Mods.AS.Traits
 
 		public TeleportNetwork(ActorInitializer init, TeleportNetworkInfo info)
 		{
-			this.Info = info;
+			Info = info;
 		}
 
 		void IncreaseTeleportNetworkCount(Actor self, Player owner)
@@ -75,9 +73,9 @@ namespace OpenRA.Mods.AS.Traits
 			}
 		}
 
-		public void AddedToWorld(Actor self)
+		void INotifyAddedToWorld.AddedToWorld(Actor self)
 		{
-			tnm = self.Owner.PlayerActor.TraitsImplementing<TeleportNetworkManager>().First(x => x.Type == this.Info.Type);
+			tnm = self.Owner.PlayerActor.TraitsImplementing<TeleportNetworkManager>().First(x => x.Type == Info.Type);
 			IncreaseTeleportNetworkCount(self, self.Owner);
 		}
 
@@ -87,6 +85,9 @@ namespace OpenRA.Mods.AS.Traits
 			IncreaseTeleportNetworkCount(self, newOwner);
 		}
 
-		public void RemovedFromWorld(Actor self) { DecreaseTeleportNetworkCount(self, self.Owner); }
+		void INotifyRemovedFromWorld.RemovedFromWorld(Actor self)
+		{
+			DecreaseTeleportNetworkCount(self, self.Owner);
+		}
 	}
 }

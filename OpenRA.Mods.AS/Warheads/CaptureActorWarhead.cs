@@ -45,7 +45,7 @@ namespace OpenRA.Mods.AS.Warheads
 		[Desc("Stance that the structure's previous owner needs to have for the capturing player to receive Experience.")]
 		public readonly Stance PlayerExperienceStances = Stance.Enemy;
 
-		public override void DoImpact(Target target, Actor firedBy, IEnumerable<int> damageModifiers)
+		public override void DoImpact(Target target, Target guidedTarget, Actor firedBy, IEnumerable<int> damageModifiers)
 		{
 			if (!target.IsValidFor(firedBy))
 				return;
@@ -103,7 +103,7 @@ namespace OpenRA.Mods.AS.Warheads
 					foreach (var t in a.TraitsImplementing<INotifyCapture>())
 						t.OnCapture(a, firedBy, oldOwner, a.Owner, CaptureTypes);
 
-					if (firedBy.Owner.Stances[oldOwner].HasStance(ExperienceStances))
+					if (!firedBy.IsDead && firedBy.Owner.Stances[oldOwner].HasStance(ExperienceStances))
 					{
 						var exp = firedBy.TraitOrDefault<GainsExperience>();
 						if (exp != null)

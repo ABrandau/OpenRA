@@ -125,9 +125,6 @@ namespace OpenRA.Mods.Common.Activities
 				return attackAircraft.Info.AbortOnResupply;
 			}
 
-			if (attackAircraft.IsTraitDisabled)
-				return NextActivity;
-
 			var pos = self.CenterPosition;
 			var checkTarget = useLastVisibleTarget ? lastVisibleTarget : target;
 

@@ -13,9 +13,9 @@ using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Effects;
 using OpenRA.Graphics;
-using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Effects;
 using OpenRA.Mods.Common.Graphics;
+using OpenRA.Mods.Common.Orders;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Primitives;
 using OpenRA.Traits;
@@ -57,7 +57,7 @@ namespace OpenRA.Mods.AS.Traits
 		public override object Create(ActorInitializer init) { return new FireArmamentPower(init.Self, this); }
 	}
 
-	public class FireArmamentPower : SupportPower, ITick, INotifyBurstComplete, INotifyCreated, IResolveOrder
+	public class FireArmamentPower : SupportPower, ITick, INotifyBurstComplete, IResolveOrder
 	{
 		public readonly FireArmamentPowerInfo FireArmamentPowerInfo;
 
@@ -81,13 +81,15 @@ namespace OpenRA.Mods.AS.Traits
 			enabled = false;
 		}
 
-		void INotifyCreated.Created(Actor self)
+		protected override void Created(Actor self)
 		{
 			facing = self.TraitOrDefault<IFacing>();
 			Armaments = self.TraitsImplementing<Armament>().Where(t => t.Info.Name.Contains(FireArmamentPowerInfo.ArmamentName)).ToArray();
 
 			var armamentturrets = Armaments.Select(x => x.Info.Turret).ToHashSet();
 			turreted = self.TraitsImplementing<Turreted>().Where(x => armamentturrets.Contains(x.Name)).Count() > 0;
+
+			base.Created(self);
 		}
 
 		public override void Activate(Actor self, Order order, SupportPowerManager manager)
@@ -148,6 +150,7 @@ namespace OpenRA.Mods.AS.Traits
 					FireArmamentPowerInfo.BeaconPaletteIsPlayerPalette,
 					FireArmamentPowerInfo.BeaconPalette,
 					FireArmamentPowerInfo.BeaconImage,
+					FireArmamentPowerInfo.BeaconSequence,
 					FireArmamentPowerInfo.BeaconPoster,
 					FireArmamentPowerInfo.BeaconPosterPalette,
 					FireArmamentPowerInfo.ArrowSequence,
@@ -191,7 +194,8 @@ namespace OpenRA.Mods.AS.Traits
 				}
 			}
 
-			foreach (var a in activeArmaments) {
+			foreach (var a in activeArmaments)
+			{
 				a.CheckFire(self, facing, target);
 			}
 
@@ -221,7 +225,7 @@ namespace OpenRA.Mods.AS.Traits
 		float FractionComplete { get { return ticks * 1f / estimatedTicks; } }
 	}
 
-	public class SelectArmamentPowerTarget : IOrderGenerator
+	public class SelectArmamentPowerTarget : OrderGenerator
 	{
 		readonly Actor self;
 		readonly SupportPowerManager manager;
@@ -252,6 +256,7 @@ namespace OpenRA.Mods.AS.Traits
 					.Where(x => x.Actor.Owner == self.Owner
 						&& x.Trait.FireArmamentPowerInfo.OrderName.Contains(power.FireArmamentPowerInfo.OrderName)
 						&& x.Trait.IsActive(x.Actor));
+
 				foreach (var a in actorswithpower)
 				{
 					yield return Tuple.Create(a.Trait,
@@ -269,7 +274,7 @@ namespace OpenRA.Mods.AS.Traits
 			yield break;
 		}
 
-		IEnumerable<Order> IOrderGenerator.Order(World world, CPos xy, int2 worldpixel, MouseInput mi)
+		protected override IEnumerable<Order> OrderInner(World world, CPos xy, int2 worldpixel, MouseInput mi)
 		{
 			var pos = world.Map.CenterOfCell(xy);
 
@@ -289,29 +294,31 @@ namespace OpenRA.Mods.AS.Traits
 			}
 		}
 
-		public virtual void Tick(World world)
+		protected override void Tick(World world)
 		{
 			// Cancel the OG if we can't use the power
 			if (!manager.Powers.ContainsKey(order))
 				world.CancelInputMode();
 		}
 
-		public IEnumerable<IRenderable> Render(WorldRenderer wr, World world) { yield break; }
+		protected override IEnumerable<IRenderable> Render(WorldRenderer wr, World world) { yield break; }
 
-		public IEnumerable<IRenderable> RenderAboveShroud(WorldRenderer wr, World world)
+		protected override IEnumerable<IRenderable> RenderAboveShroud(WorldRenderer wr, World world) { yield break; }
+
+		protected override IEnumerable<IRenderable> RenderAnnotations(WorldRenderer wr, World world)
 		{
 			foreach (var i in instances)
 			{
 				if (!i.Item1.IsTraitPaused && !i.Item1.IsTraitDisabled)
 				{
-					yield return new RangeCircleRenderable(
+					yield return new RangeCircleAnnotationRenderable(
 						i.Item1.Self.CenterPosition,
 						i.Item2,
 						0,
 						Color.Red,
 						Color.FromArgb(96, Color.Black));
 
-					yield return new RangeCircleRenderable(
+					yield return new RangeCircleAnnotationRenderable(
 						i.Item1.Self.CenterPosition,
 						i.Item3,
 						0,
@@ -327,7 +334,7 @@ namespace OpenRA.Mods.AS.Traits
 				var targetRangeColor = power.FireArmamentPowerInfo.TargetCircleUsePlayerColor
 					? power.Self.Owner.Color : power.FireArmamentPowerInfo.TargetCircleColor;
 
-				yield return new RangeCircleRenderable(
+				yield return new RangeCircleAnnotationRenderable(
 					world.Map.CenterOfCell(xy),
 					power.FireArmamentPowerInfo.TargetCircleRange,
 					0,
@@ -336,7 +343,7 @@ namespace OpenRA.Mods.AS.Traits
 			}
 		}
 
-		string IOrderGenerator.GetCursor(World world, CPos cell, int2 worldPixel, MouseInput mi)
+		protected override string GetCursor(World world, CPos cell, int2 worldPixel, MouseInput mi)
 		{
 			return IsValidTargetCell(cell) ? power.FireArmamentPowerInfo.Cursor : "generic-blocked";
 		}
@@ -351,5 +358,7 @@ namespace OpenRA.Mods.AS.Traits
 			return instances.Any(x => !x.Item1.IsTraitPaused && !x.Item1.IsTraitDisabled
 				&& tc.IsInRange(x.Item1.Self.CenterPosition, x.Item3) && !tc.IsInRange(x.Item1.Self.CenterPosition, x.Item2));
 		}
+
+		public void Deactivate() { }
 	}
 }

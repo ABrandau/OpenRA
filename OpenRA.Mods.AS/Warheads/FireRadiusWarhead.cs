@@ -1,4 +1,4 @@
-#region Copyright & License Information
+﻿#region Copyright & License Information
 /*
  * Copyright 2015- OpenRA.Mods.AS Developers (see AUTHORS)
  * This file is a part of a third-party plugin for OpenRA, which is
@@ -11,24 +11,25 @@
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.GameRules;
+using OpenRA.Mods.Common;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.AS.Warheads
 {
-	public class FireClusterWarhead : WarheadAS, IRulesetLoaded<WeaponInfo>
+	[Desc("Fires a defined amount of weapons with their maximum range in a wave pattern.")]
+	public class FireRadiusWarhead : WarheadAS, IRulesetLoaded<WeaponInfo>
 	{
-		[WeaponReference, FieldLoader.Require]
+		[WeaponReference]
+		[FieldLoader.Require]
 		[Desc("Has to be defined in weapons.yaml as well.")]
 		public readonly string Weapon = null;
 
-		[FieldLoader.Require]
-		[Desc("Size of the cluster footprint")]
-		public readonly CVec Dimensions = CVec.Zero;
+		[Desc("Amount of weapons fired.")]
+		public readonly int[] Amount = { 1 };
 
-		[FieldLoader.Require]
-		[Desc("Cluster footprint. Cells marked as x will be attacked.")]
-		public readonly string Footprint = string.Empty;
+		[Desc("Should the weapons be fired around the intended target or at the explosion's epicenter.")]
+		public readonly bool AroundTarget = false;
 
 		WeaponInfo weapon;
 
@@ -38,31 +39,44 @@ namespace OpenRA.Mods.AS.Warheads
 				throw new YamlException("Weapons Ruleset does not contain an entry '{0}'".F(Weapon.ToLowerInvariant()));
 		}
 
-		public override void DoImpact(Target target, Actor firedBy, IEnumerable<int> damageModifiers)
+		public override void DoImpact(Target target, Target guidedTarget, Actor firedBy, IEnumerable<int> damageModifiers)
 		{
 			if (!target.IsValidFor(firedBy))
 				return;
 
-			var map = firedBy.World.Map;
-
-			var targetCell = map.CellContaining(target.CenterPosition);
+			var world = firedBy.World;
+			var map = world.Map;
 
 			if (!IsValidImpact(target.CenterPosition, firedBy))
 				return;
 
-			var targetCells = CellsMatching(targetCell);
+			var epicenter = AroundTarget && guidedTarget.Type != TargetType.Invalid
+				? guidedTarget.CenterPosition
+				: target.CenterPosition;
 
-			foreach (var cell in targetCells)
+			var amount = Amount.Length == 2
+					? world.SharedRandom.Next(Amount[0], Amount[1])
+					: Amount[0];
+
+			var offset = 256 / amount;
+
+			for (var i = 0; i < amount; i++)
 			{
-				var tc = Target.FromCell(firedBy.World, cell);
+				Target radiusTarget = Target.Invalid;
 
-				if (!weapon.IsValidAgainst(tc, firedBy.World, firedBy))
+				var rotation = WRot.FromFacing(i * offset);
+				var targetpos = epicenter + new WVec(weapon.Range.Length, 0, 0).Rotate(rotation);
+				var tpos = Target.FromPos(new WPos(targetpos.X, targetpos.Y, map.CenterOfCell(map.CellContaining(targetpos)).Z));
+				if (weapon.IsValidAgainst(tpos, firedBy.World, firedBy))
+					radiusTarget = tpos;
+
+				if (radiusTarget.Type == TargetType.Invalid)
 					continue;
 
 				var args = new ProjectileArgs
 				{
 					Weapon = weapon,
-					Facing = (map.CenterOfCell(cell) - target.CenterPosition).Yaw.Facing,
+					Facing = (radiusTarget.CenterPosition - target.CenterPosition).Yaw.Facing,
 
 					DamageModifiers = !firedBy.IsDead ? firedBy.TraitsImplementing<IFirepowerModifier>()
 						.Select(a => a.GetFirepowerModifier()).ToArray() : new int[0],
@@ -76,8 +90,8 @@ namespace OpenRA.Mods.AS.Warheads
 					Source = target.CenterPosition,
 					CurrentSource = () => target.CenterPosition,
 					SourceActor = firedBy,
-					PassiveTarget = map.CenterOfCell(cell),
-					GuidedTarget = tc
+					GuidedTarget = radiusTarget,
+					PassiveTarget = radiusTarget.CenterPosition
 				};
 
 				if (args.Weapon.Projectile != null)
@@ -90,18 +104,6 @@ namespace OpenRA.Mods.AS.Warheads
 						Game.Sound.Play(SoundType.World, args.Weapon.Report.Random(firedBy.World.SharedRandom), target.CenterPosition);
 				}
 			}
-		}
-
-		IEnumerable<CPos> CellsMatching(CPos location)
-		{
-			var index = 0;
-			var footprint = Footprint.Where(c => !char.IsWhiteSpace(c)).ToArray();
-			var x = location.X - (Dimensions.X - 1) / 2;
-			var y = location.Y - (Dimensions.Y - 1) / 2;
-			for (var j = 0; j < Dimensions.Y; j++)
-				for (var i = 0; i < Dimensions.X; i++)
-					if (footprint[index++] == 'x')
-						yield return new CPos(x + i, y + j);
 		}
 	}
 }

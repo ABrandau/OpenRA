@@ -16,10 +16,11 @@ using OpenRA.Traits;
 
 namespace OpenRA.Mods.AS.Traits
 {
-	[Desc("Spawns survivors when an actor is destroyed.")]
+	[Desc("Spawns survivors when an actor is destroyed or sold.")]
 	public class SpawnSurvivorsInfo : ConditionalTraitInfo
 	{
-		[ActorReference, FieldLoader.Require]
+		[ActorReference]
+		[FieldLoader.Require]
 		[Desc("The actors spawned.")]
 		public readonly string[] Actors = { };
 
@@ -29,7 +30,7 @@ namespace OpenRA.Mods.AS.Traits
 		public override object Create(ActorInitializer actor) { return new SpawnSurvivors(this); }
 	}
 
-	public class SpawnSurvivors : ConditionalTrait<SpawnSurvivorsInfo>, INotifyKilled
+	public class SpawnSurvivors : ConditionalTrait<SpawnSurvivorsInfo>, INotifyKilled, INotifySold
 	{
 		public SpawnSurvivors(SpawnSurvivorsInfo info)
 			: base(info) { }
@@ -42,27 +43,41 @@ namespace OpenRA.Mods.AS.Traits
 			if (!Info.DeathTypes.IsEmpty && !attack.Damage.DamageTypes.Overlaps(Info.DeathTypes))
 				return;
 
+			Spawn(self);
+		}
+
+		void INotifySold.Selling(Actor self) { }
+
+		void INotifySold.Sold(Actor self)
+		{
+			if (IsTraitDisabled)
+				return;
+
+			Spawn(self);
+		}
+
+		void Spawn(Actor self)
+		{
 			var buildingInfo = self.Info.TraitInfoOrDefault<BuildingInfo>();
 			var eligibleLocations = buildingInfo != null
 				? buildingInfo.Tiles(self.Location).ToList()
 				: new List<CPos>() { self.World.Map.CellContaining(self.CenterPosition) };
 
-			foreach (var actorType in Info.Actors)
+			self.World.AddFrameEndTask(w =>
 			{
-				var td = new TypeDictionary();
-
-				td.Add(new OwnerInit(self.Owner));
-				td.Add(new LocationInit(eligibleLocations.Random(self.World.SharedRandom)));
-
-				var unit = self.World.CreateActor(false, actorType.ToLowerInvariant(), td);
-				self.World.AddFrameEndTask(w =>
+				foreach (var actorType in Info.Actors)
 				{
-					w.Add(unit);
+					var td = new TypeDictionary();
+
+					td.Add(new OwnerInit(self.Owner));
+					td.Add(new LocationInit(eligibleLocations.Random(w.SharedRandom)));
+
+					var unit = w.CreateActor(true, actorType.ToLowerInvariant(), td);
 					var mobile = unit.TraitOrDefault<Mobile>();
 					if (mobile != null)
-						mobile.Nudge(unit, unit, true);
-				});
-			}
+						mobile.Nudge(unit);
+				}
+			});
 		}
 	}
 }

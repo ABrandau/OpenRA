@@ -24,8 +24,9 @@ namespace OpenRA.Mods.AS.Projectiles
 	[Desc("Laser effect with helix coiling made of sprite animations around.")]
 	public class SmokeParticleRailgunInfo : IProjectileInfo, ISmokeParticleInfo, IRulesetLoaded<WeaponInfo>
 	{
-		[Desc("Damage all units hit by the beam instead of just the target?")]
-		public readonly bool DamageActorsInLine = false;
+		[Desc("The width of the main trajectory used for damaging.",
+			"Leave it on 0 to disable line damage and deliver damage only at the target position.")]
+		public readonly WDist LineWidth = WDist.Zero;
 
 		[Desc("Maximum offset at the maximum range.")]
 		public readonly WDist Inaccuracy = WDist.Zero;
@@ -39,7 +40,7 @@ namespace OpenRA.Mods.AS.Projectiles
 		[Desc("Equivalent to sequence ZOffset. Controls Z sorting.")]
 		public readonly int ZOffset = 0;
 
-		[Desc("The width of the main trajectory. (\"beam\").")]
+		[Desc("The width of an optional laser beam.")]
 		public readonly WDist BeamWidth = new WDist(86);
 
 		[Desc("The shape of the beam.  Accepts values Cylindrical or Flat.")]
@@ -64,13 +65,12 @@ namespace OpenRA.Mods.AS.Projectiles
 		[Desc("Draw each cycle of helix with this many quantization steps")]
 		public readonly int QuantizationCount = 16;
 
-		[FieldLoader.Require]
 		[Desc("Helix animation.")]
-		public readonly string HelixImage = null;
+		public readonly string HelixImage = "particles";
 
 		[FieldLoader.Require]
 		[Desc("Sequence of helix animation to use.")]
-		[SequenceReference("HelixParticle")]
+		[SequenceReference("HelixImage")]
 		public readonly string[] HelixSequences;
 
 		[PaletteReference]
@@ -80,8 +80,17 @@ namespace OpenRA.Mods.AS.Projectiles
 		[Desc("The duration of an individual particle. Two values mean actual lifetime will vary between them.")]
 		public readonly int[] HelixDuration;
 
+		[Desc("Randomize particle forward movement.")]
+		public readonly WDist[] HelixSpeed = { WDist.Zero };
+
 		[Desc("Randomize particle gravity.")]
-		public readonly WVec[] HelixGravity = { WVec.Zero };
+		public readonly WDist[] HelixGravity = { WDist.Zero };
+
+		[Desc("Randomize particle turnrate.")]
+		public readonly int HelixTurnRate = 0;
+
+		[Desc("Randomize particle facing.")]
+		public readonly bool HelixRandomFacing = true;
 
 		[WeaponReference]
 		[Desc("Has to be defined in weapons.yaml, if defined, as well.")]
@@ -120,12 +129,17 @@ namespace OpenRA.Mods.AS.Projectiles
 			get { return HelixPalette; }
 		}
 
+		WDist[] ISmokeParticleInfo.Speed
+		{
+			get { return HelixSpeed; }
+		}
+
 		int[] ISmokeParticleInfo.Duration
 		{
 			get { return HelixDuration; }
 		}
 
-		WVec[] ISmokeParticleInfo.Gravity
+		WDist[] ISmokeParticleInfo.Gravity
 		{
 			get { return HelixGravity; }
 		}
@@ -133,6 +147,11 @@ namespace OpenRA.Mods.AS.Projectiles
 		WeaponInfo ISmokeParticleInfo.Weapon
 		{
 			get { return helixWeapon; }
+		}
+
+		int ISmokeParticleInfo.TurnRate
+		{
+			get { return HelixTurnRate; }
 		}
 
 		void IRulesetLoaded<WeaponInfo>.RulesetLoaded(Ruleset rules, WeaponInfo info)
@@ -167,8 +186,7 @@ namespace OpenRA.Mods.AS.Projectiles
 			this.args = args;
 			this.info = info;
 			target = args.PassiveTarget;
-
-			this.BeamColor = beamColor;
+			BeamColor = beamColor;
 
 			if (!string.IsNullOrEmpty(info.HitAnim))
 				hitanim = new Animation(args.SourceActor.World, info.HitAnim);
@@ -188,7 +206,7 @@ namespace OpenRA.Mods.AS.Projectiles
 				var offset = rad.Length * angle.Cos() * leftVector / (1024 * 1024)
 					+ rad.Length * angle.Sin() * upVector / (1024 * 1024);
 				var animpos = pos + offset;
-				args.SourceActor.World.AddFrameEndTask(w => w.Add(new SmokeParticle(args.SourceActor, info, animpos)));
+				args.SourceActor.World.AddFrameEndTask(w => w.Add(new SmokeParticle(args.SourceActor, info, animpos, info.HelixRandomFacing ? -1 : angle.Facing)));
 
 				pos += forwardStep;
 				angle += angleStep;
@@ -200,7 +218,7 @@ namespace OpenRA.Mods.AS.Projectiles
 			// Check for blocking actors
 			WPos blockedPos;
 			if (info.Blockable && BlocksProjectiles.AnyBlockingActorsBetween(args.SourceActor.World, target, args.Source,
-					info.BeamWidth, out blockedPos))
+					info.LineWidth, out blockedPos))
 				target = blockedPos;
 
 			// Note: WAngle.Sin(x) = 1024 * Math.Sin(2pi/1024 * x)
@@ -220,10 +238,12 @@ namespace OpenRA.Mods.AS.Projectiles
 			leftVector = 1024 * leftVector / leftVector.Length;
 
 			// Vector that is pointing upwards from the ground
-			upVector = new WVec(
-				-forwardStep.X * forwardStep.Z,
-				-forwardStep.Z * forwardStep.Y,
-				forwardStep.X * forwardStep.X + forwardStep.Y * forwardStep.Y);
+			upVector = leftVector.Length != 0
+					? new WVec(
+					-forwardStep.X * forwardStep.Z,
+					-forwardStep.Z * forwardStep.Y,
+					forwardStep.X * forwardStep.X + forwardStep.Y * forwardStep.Y)
+					: new WVec(forwardStep.Z, forwardStep.Z, 0);
 			upVector = 1024 * upVector / upVector.Length;
 
 			//// LeftVector and UpVector are unit vectors of size 1024.
@@ -242,14 +262,14 @@ namespace OpenRA.Mods.AS.Projectiles
 				else
 					animationComplete = true;
 
-				if (!info.DamageActorsInLine)
-					args.Weapon.Impact(Target.FromPos(target), args.SourceActor, args.DamageModifiers);
-				else
+				if (info.LineWidth.Length > 0)
 				{
-					var actors = world.FindActorsOnLine(args.Source, target, info.BeamWidth);
+					var actors = world.FindActorsOnLine(args.Source, target, info.LineWidth);
 					foreach (var a in actors)
-						args.Weapon.Impact(Target.FromActor(a), args.SourceActor, args.DamageModifiers);
+						args.Weapon.Impact(Target.FromActor(a), args.GuidedTarget, args.SourceActor, args.DamageModifiers);
 				}
+				else
+					args.Weapon.Impact(Target.FromPos(target), args.GuidedTarget, args.SourceActor, args.DamageModifiers);
 			}
 
 			if (hitanim != null)
@@ -265,7 +285,7 @@ namespace OpenRA.Mods.AS.Projectiles
 				wr.World.FogObscures(args.Source))
 				yield break;
 
-			if (ticks < info.Duration)
+			if (info.BeamWidth.Length > 0 && ticks < info.Duration)
 			{
 				yield return new BeamRenderable(args.Source, info.ZOffset, args.PassiveTarget - args.Source, info.BeamShape, info.BeamWidth,
 					Color.FromArgb(BeamColor.A + info.BeamAlphaDeltaPerTick * ticks, BeamColor));

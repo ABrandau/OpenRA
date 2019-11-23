@@ -1,4 +1,4 @@
-﻿#region Copyright & License Information
+#region Copyright & License Information
 /*
  * Copyright 2007-2018 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
@@ -12,11 +12,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OpenRA.Mods.AS.Activities;
+using OpenRA.Mods.Common;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Orders;
+using OpenRA.Mods.Common.Traits;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
-namespace OpenRA.Mods.Common.Traits
+namespace OpenRA.Mods.AS.Traits
 {
 	[Desc("This actor can transport Passenger actors.")]
 	public class SharedCargoInfo : PausableConditionalTraitInfo, Requires<IOccupySpaceInfo>
@@ -24,7 +28,7 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Number of pips to display when this actor is selected.")]
 		public readonly int PipCount = 0;
 
-		[Desc("`Passenger.CargoType`s that can be loaded into this actor.")]
+		[Desc("`SharedPassenger.CargoType`s that can be loaded into this actor.")]
 		public readonly HashSet<string> Types = new HashSet<string>();
 
 		[Desc("`SharedCargoManager.Type` thar this actor shares its passengers.")]
@@ -33,8 +37,9 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Terrain types that this actor is allowed to eject actors onto. Leave empty for all terrain types.")]
 		public readonly HashSet<string> UnloadTerrainTypes = new HashSet<string>();
 
+		[VoiceReference]
 		[Desc("Voice to play when ordered to unload the passengers.")]
-		[VoiceReference] public readonly string UnloadVoice = "Action";
+		public readonly string UnloadVoice = "Action";
 
 		[Desc("Which direction the passenger will face (relative to the transport) when unloading.")]
 		public readonly int PassengerFacing = 128;
@@ -51,11 +56,11 @@ namespace OpenRA.Mods.Common.Traits
 
 		[GrantedConditionReference]
 		[Desc("The condition to grant to self while passengers are loaded.",
-"Condition can stack with multiple passengers.")]
+			"Condition can stack with multiple passengers.")]
 		public readonly string LoadedCondition = null;
 
 		[Desc("Conditions to grant when specified actors are loaded inside the transport.",
-"A dictionary of [actor id]: [condition].")]
+			"A dictionary of [actor id]: [condition].")]
 		public readonly Dictionary<string, string> PassengerConditions = new Dictionary<string, string>();
 
 		[GrantedConditionReference]
@@ -107,7 +112,7 @@ namespace OpenRA.Mods.Common.Traits
 				if (IsTraitDisabled)
 					yield break;
 
-				yield return new DeployOrderTargeter("UnloadShared", 10, () => CanUnload()? Info.UnloadCursor : Info.UnloadBlockedCursor);
+				yield return new DeployOrderTargeter("UnloadShared", 10, () => CanUnload() ? Info.UnloadCursor : Info.UnloadBlockedCursor);
 			}
 		}
 
@@ -119,14 +124,9 @@ namespace OpenRA.Mods.Common.Traits
 			return null;
 		}
 
-		public Order IssueDeployOrder(Actor self, bool queued)
+		Order IIssueDeployOrder.IssueDeployOrder(Actor self, bool queued)
 		{
 			return new Order("UnloadShared", self, queued);
-		}
-
-		Order IIssueDeployOrder.IssueDeployOrder(Actor self)
-		{
-			return new Order("UnloadShared", self, false);
 		}
 
 		bool IIssueDeployOrder.CanIssueDeployOrder(Actor self) { return true; }
@@ -141,7 +141,7 @@ namespace OpenRA.Mods.Common.Traits
 				Unloading = true;
 				self.CancelActivity();
 				if (aircraft != null)
-					self.QueueActivity(new HeliLand(self, true));
+					self.QueueActivity(new Land(self));
 				self.QueueActivity(new UnloadSharedCargo(self, true));
 			}
 		}
@@ -265,7 +265,7 @@ namespace OpenRA.Mods.Common.Traits
 
 			var numPips = Info.PipCount;
 
-			for (var i = 0; i<numPips; i++)
+			for (var i = 0; i < numPips; i++)
 				yield return GetPipAt(i);
 		}
 
@@ -276,7 +276,7 @@ namespace OpenRA.Mods.Common.Traits
 			foreach (var c in Manager.Cargo)
 			{
 				var pi = c.Info.TraitInfo<SharedPassengerInfo>();
-				if (n<pi.Weight)
+				if (n < pi.Weight)
 					return pi.PipType;
 				else
 					n -= pi.Weight;

@@ -11,13 +11,20 @@
 using OpenRA.GameRules;
 using OpenRA.Mods.AS.Effects;
 using OpenRA.Mods.Common.Traits;
-using OpenRA.Support;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.AS.Traits
 {
-	public class SmokeParticleEmitterInfo : ConditionalTraitInfo, ISmokeParticleInfo, IRulesetLoaded
+	[Desc("Spawn smoke particles when this actor is killed.")]
+	public class SpawnSmokeParticleOnDeathInfo : ConditionalTraitInfo, ISmokeParticleInfo, IRulesetLoaded
 	{
+		[Desc("How many particles should spawn.")]
+		public readonly int[] Amount = { 1 };
+
+		[Desc("DeathType(s) that trigger spawning. Leave empty to always spawn.")]
+		public readonly BitSet<DamageType> DeathTypes = default(BitSet<DamageType>);
+
 		[FieldLoader.Require]
 		[Desc("The duration of an individual particle. Two values mean actual lifetime will vary between them.")]
 		public readonly int[] Duration;
@@ -31,14 +38,8 @@ namespace OpenRA.Mods.AS.Traits
 		[Desc("Randomize particle gravity.")]
 		public readonly WDist[] Gravity = { WDist.Zero };
 
-		[Desc("Randomize particle facing.")]
-		public readonly bool RandomFacing = true;
-
 		[Desc("Randomize particle turnrate.")]
 		public readonly int TurnRate = 0;
-
-		[Desc("How many particles should spawn.")]
-		public readonly int[] SpawnFrequency = { 100, 150 };
 
 		[Desc("Which image to use.")]
 		public readonly string Image = "particles";
@@ -72,7 +73,7 @@ namespace OpenRA.Mods.AS.Traits
 			WeaponInfo = weaponInfo;
 		}
 
-		public override object Create(ActorInitializer init) { return new SmokeParticleEmitter(init.Self, this); }
+		public override object Create(ActorInitializer init) { return new SpawnSmokeParticleOnDeath(init.Self, this); }
 
 		string ISmokeParticleInfo.Image
 		{
@@ -115,43 +116,32 @@ namespace OpenRA.Mods.AS.Traits
 		}
 	}
 
-	public class SmokeParticleEmitter : ConditionalTrait<SmokeParticleEmitterInfo>, ITick
+	public class SpawnSmokeParticleOnDeath : ConditionalTrait<SpawnSmokeParticleOnDeathInfo>, INotifyKilled
 	{
-		readonly MersenneTwister random;
-		readonly WVec offset;
+		public SpawnSmokeParticleOnDeath(Actor self, SpawnSmokeParticleOnDeathInfo info)
+			: base(info) { }
 
-		IFacing facing;
-		int ticks;
-
-		public SmokeParticleEmitter(Actor self, SmokeParticleEmitterInfo info)
-			: base(info)
-		{
-			random = self.World.SharedRandom;
-
-			offset = Info.Offset.Length == 2
-				? new WVec(random.Next(Info.Offset[0].X, Info.Offset[1].X), random.Next(Info.Offset[0].Y, Info.Offset[1].Y), random.Next(Info.Offset[0].Z, Info.Offset[1].Z))
-				: Info.Offset[0];
-		}
-
-		protected override void Created(Actor self)
-		{
-			facing = self.TraitOrDefault<IFacing>();
-
-			base.Created(self);
-		}
-
-		void ITick.Tick(Actor self)
+		void INotifyKilled.Killed(Actor self, AttackInfo e)
 		{
 			if (IsTraitDisabled)
 				return;
 
-			if (--ticks < 0)
+			if (!Info.DeathTypes.IsEmpty && !e.Damage.DamageTypes.Overlaps(Info.DeathTypes))
+				return;
+
+			var random = self.World.SharedRandom;
+
+			var amount = Info.Amount.Length == 2
+				? random.Next(Info.Amount[0], Info.Amount[1])
+				: Info.Amount[0];
+
+			for (int i = 0; i < amount; i++)
 			{
-				ticks = Info.SpawnFrequency.Length == 2 ? random.Next(Info.SpawnFrequency[0], Info.SpawnFrequency[1]) : Info.SpawnFrequency[0];
+				var offset = Info.Offset.Length == 2
+				? new WVec(random.Next(Info.Offset[0].X, Info.Offset[1].X), random.Next(Info.Offset[0].Y, Info.Offset[1].Y), random.Next(Info.Offset[0].Z, Info.Offset[1].Z))
+				: Info.Offset[0];
 
-				var spawnFacing = (!Info.RandomFacing && facing != null) ? facing.Facing : -1;
-
-				self.World.AddFrameEndTask(w => w.Add(new SmokeParticle(self, Info, self.CenterPosition + offset, spawnFacing)));
+				self.World.AddFrameEndTask(w => w.Add(new SmokeParticle(e.Attacker, Info, self.CenterPosition + offset)));
 			}
 		}
 	}

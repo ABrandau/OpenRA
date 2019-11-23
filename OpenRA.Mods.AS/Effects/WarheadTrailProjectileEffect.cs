@@ -26,15 +26,20 @@ namespace OpenRA.Mods.AS.Effects
 		readonly WarheadTrailProjectileInfo info;
 		readonly ProjectileArgs args;
 		readonly Animation anim;
+		readonly string trailPalette;
+
+		[Sync]
+		readonly WPos targetpos, source;
+		[Sync]
+		readonly int facing;
+
+		readonly int lifespan, estimatedlifespan;
 
 		ContrailRenderable contrail;
-		string trailPalette;
 
 		[Sync]
-		WPos projectilepos, targetpos, source;
-		int lifespan, estimatedlifespan;
-		[Sync]
-		int facing;
+		WPos projectilepos;
+
 		int ticks, smokeTicks;
 		World world;
 		public bool DetonateSelf { get; private set; }
@@ -130,7 +135,7 @@ namespace OpenRA.Mods.AS.Effects
 			{
 				var delayedPos = WPos.Lerp(source, targetpos, ticks - info.TrailDelay, estimatedlifespan);
 				world.AddFrameEndTask(w => w.Add(new SpriteEffect(delayedPos, w, info.TrailImage, info.TrailSequences.Random(world.SharedRandom),
-					trailPalette, false, false, GetEffectiveFacing())));
+					trailPalette, facing: GetEffectiveFacing())));
 
 				smokeTicks = info.TrailInterval;
 			}
@@ -152,7 +157,7 @@ namespace OpenRA.Mods.AS.Effects
 
 		public void Explode(World world)
 		{
-			args.Weapon.Impact(Target.FromPos(projectilepos), args.SourceActor, args.DamageModifiers);
+			args.Weapon.Impact(Target.FromPos(projectilepos), args.GuidedTarget, args.SourceActor, args.DamageModifiers);
 
 			if (info.ContrailLength > 0)
 				world.AddFrameEndTask(w => w.Add(new ContrailFader(projectilepos, contrail)));

@@ -238,7 +238,7 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 				var location = self.World.Map.CellContaining(centerPosition + spawnOffset);
 
 				var mv = slave.Trait<IMove>();
-				slave.QueueActivity(mv.MoveIntoWorld(slave, location));
+				slave.QueueActivity(mv.ReturnToCell(slave));
 
 				// Move to rally point if any.
 				if (rallyPoint != null)

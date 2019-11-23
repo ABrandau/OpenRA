@@ -42,7 +42,8 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 
 		CarrierMaster spawnerMaster;
 
-		public CarrierSlave(ActorInitializer init, CarrierSlaveInfo info) : base(init, info)
+		public CarrierSlave(ActorInitializer init, CarrierSlaveInfo info)
+			: base(init, info)
 		{
 			Info = info;
 			ammoPools = init.Self.TraitsImplementing<AmmoPool>().ToArray();
@@ -81,7 +82,7 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 			if (ammoPools.Length == 0)
 				return false;
 
-			return ammoPools.All(x => !x.HasAmmo()); // TODO same autoreaload hack as previously
+			return ammoPools.All(x => !x.HasAmmo); // TODO same autoreaload hack as previously
 		}
 
 		public virtual void OnBecomingIdle(Actor self)

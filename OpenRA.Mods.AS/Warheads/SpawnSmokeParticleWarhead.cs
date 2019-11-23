@@ -18,17 +18,27 @@ namespace OpenRA.Mods.AS.Warheads
 {
 	public class SpawnSmokeParticleWarhead : WarheadAS, IRulesetLoaded<WeaponInfo>, ISmokeParticleInfo
 	{
+		[Desc("Amount of particles spawned. Two values mean actual amount will vary between them.")]
+		public readonly int[] Count = { 1 };
+
 		[FieldLoader.Require]
 		[Desc("The duration of an individual particle. Two values mean actual lifetime will vary between them.")]
 		public readonly int[] Duration;
 
+		[Desc("Randomize particle forward movement.")]
+		public readonly WDist[] Speed = { WDist.Zero };
+
 		[Desc("Randomize particle gravity.")]
-		public readonly WVec[] Gravity = { WVec.Zero };
+		public readonly WDist[] Gravity = { WDist.Zero };
+
+		[Desc("Randomize particle turnrate.")]
+		public readonly int TurnRate = 0;
 
 		[Desc("Which image to use.")]
 		public readonly string Image = "particles";
 
-		[FieldLoader.Require, SequenceReference("Image")]
+		[FieldLoader.Require]
+		[SequenceReference("Image")]
 		[Desc("Which sequence to use.")]
 		public readonly string[] Sequences = null;
 
@@ -60,7 +70,12 @@ namespace OpenRA.Mods.AS.Warheads
 			get { return Palette; }
 		}
 
-		WVec[] ISmokeParticleInfo.Gravity
+		WDist[] ISmokeParticleInfo.Speed
+		{
+			get { return Speed; }
+		}
+
+		WDist[] ISmokeParticleInfo.Gravity
 		{
 			get { return Gravity; }
 		}
@@ -75,6 +90,11 @@ namespace OpenRA.Mods.AS.Warheads
 			get { return weapon; }
 		}
 
+		int ISmokeParticleInfo.TurnRate
+		{
+			get { return TurnRate; }
+		}
+
 		public void RulesetLoaded(Ruleset rules, WeaponInfo info)
 		{
 			if (string.IsNullOrEmpty(Weapon))
@@ -84,7 +104,7 @@ namespace OpenRA.Mods.AS.Warheads
 				throw new YamlException("Weapons Ruleset does not contain an entry '{0}'".F(Weapon.ToLowerInvariant()));
 		}
 
-		public override void DoImpact(Target target, Actor firedBy, IEnumerable<int> damageModifiers)
+		public override void DoImpact(Target target, Target guidedTarget, Actor firedBy, IEnumerable<int> damageModifiers)
 		{
 			if (!target.IsValidFor(firedBy))
 				return;
@@ -92,10 +112,12 @@ namespace OpenRA.Mods.AS.Warheads
 			if (!IsValidImpact(target.CenterPosition, firedBy))
 				return;
 
-			if (!firedBy.IsDead)
-			{
-				firedBy.World.AddFrameEndTask(w => w.Add(new SmokeParticle(!Neutral ? firedBy : firedBy.World.WorldActor, this, target.CenterPosition)));
-			}
+			var count = Count.Length == 2
+				? firedBy.World.SharedRandom.Next(Count[0], Count[1])
+				: Count[0];
+
+			for (int i = 0; i < count; i++)
+				firedBy.World.AddFrameEndTask(w => w.Add(new SmokeParticle(Neutral || firedBy.IsDead ? firedBy.World.WorldActor : firedBy, this, target.CenterPosition)));
 		}
 	}
 }
