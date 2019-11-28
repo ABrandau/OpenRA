@@ -204,6 +204,7 @@ namespace OpenRA.Mods.Common.Traits
 		IDisposable reservation;
 		IEnumerable<int> speedModifiers;
 		INotifyMoving[] notifyMoving;
+		INotifyVisualPositionChanged[] notifyVisualPositionChanged;
 		IOverrideAircraftLanding overrideAircraftLanding;
 
 		[Sync]
@@ -221,6 +222,8 @@ namespace OpenRA.Mods.Common.Traits
 		IEnumerable<CPos> landingCells = Enumerable.Empty<CPos>();
 		bool requireForceMove;
 		int creationActivityDelay;
+
+		bool notify = true;
 
 		public static WPos GroundPosition(Actor self)
 		{
@@ -309,7 +312,7 @@ namespace OpenRA.Mods.Common.Traits
 			notifyMoving = self.TraitsImplementing<INotifyMoving>().ToArray();
 			positionOffsets = self.TraitsImplementing<IAircraftCenterPositionOffset>().ToArray();
 			overrideAircraftLanding = self.TraitOrDefault<IOverrideAircraftLanding>();
-
+			notifyVisualPositionChanged = self.TraitsImplementing<INotifyVisualPositionChanged>().ToArray();
 			base.Created(self);
 		}
 
@@ -395,7 +398,12 @@ namespace OpenRA.Mods.Common.Traits
 				return;
 
 			var speed = Info.RepulsionSpeed != -1 ? Info.RepulsionSpeed : MovementSpeed;
+
+			// HACK: Prevent updating visibility twice per tick. We really shouldn't be
+			// moving twice in a tick in the first place.
+			notify = false;
 			SetPosition(self, CenterPosition + FlyStep(speed, repulsionForce.Yaw.Facing));
+			notify = true;
 		}
 
 		public virtual WVec GetRepulsionForce()
@@ -744,6 +752,11 @@ namespace OpenRA.Mods.Common.Traits
 				OnCruisingAltitudeReached();
 			else if (!isCruising && cruising)
 				OnCruisingAltitudeLeft();
+
+			// NB: This can be called from the constructor before notifyVisualPositionChanged is assigned.
+			if (notify && notifyVisualPositionChanged != null)
+				foreach (var n in notifyVisualPositionChanged)
+					n.VisualPositionChanged(self, 0, 0);
 
 			FinishedMoving(self);
 		}
