@@ -100,7 +100,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (!dirty && cachedLocation == projectedLocation)
 				return;
 
-			cachedTraitDisabled = traitDisabled;
+			cachedLocation = projectedLocation;
 			cachedPos = pos;
 
 			UpdateShroudCells(self);
@@ -114,7 +114,7 @@ namespace OpenRA.Mods.Common.Traits
 			var traitDisabled = IsTraitDisabled;
 			var range = Range;
 
-			if (cachedRange == range && traitDisabled == CachedTraitDisabled)
+			if (cachedRange == range && traitDisabled == cachedTraitDisabled)
 				return;
 
 			cachedRange = range;
