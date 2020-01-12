@@ -242,7 +242,8 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 
 				// Move to rally point if any.
 				if (rallyPoint != null)
-					slave.QueueActivity(mv.MoveTo(rallyPoint.Location, 2));
+					foreach (var cell in rallyPoint.Path)
+						slave.QueueActivity(mv.MoveTo(cell, 2));
 				else
 				{
 					// Move to a valid position, if no rally point.
