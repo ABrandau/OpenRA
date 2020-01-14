@@ -30,6 +30,14 @@ namespace OpenRA.Mods.Common.Activities
 		readonly Actor ignoreActor;
 		readonly Color? targetLineColor;
 
+		static readonly BlockedByActor[] PathSearchOrder =
+		{
+			BlockedByActor.All,
+			BlockedByActor.Immovable,
+			BlockedByActor.Stationary,
+			BlockedByActor.None
+		};
+
 		List<CPos> path;
 		CPos? destination;
 
@@ -149,9 +157,13 @@ namespace OpenRA.Mods.Common.Activities
 				destination = mobile.CanEnterCell(movableDestination) ? movableDestination : (CPos?)null;
 			}
 
-			path = EvalPath(BlockedByActor.Stationary);
-			if (path.Count == 0)
-				path = EvalPath(BlockedByActor.None);
+			// TODO: Change this to BlockedByActor.Stationary after improving the local avoidance behaviour
+			foreach (var check in PathSearchOrder)
+			{
+				path = EvalPath(check);
+				if (path.Count > 0)
+					return;
+			}
 		}
 
 		public override bool Tick(Actor self)
@@ -227,8 +239,25 @@ namespace OpenRA.Mods.Common.Activities
 				var cellRange = nearEnough.Length / 1024;
 				if (!containsTemporaryBlocker && (mobile.ToCell - destination.Value).LengthSquared <= cellRange * cellRange)
 				{
-					path.Clear();
-					return null;
+					// Apply some simple checks to avoid giving up in cases where we can be confident that
+					// nudging/waiting/repathing should produce better results.
+
+					// Avoid fighting over the destination cell
+					var adjacentToDestination = path.Count < 2;
+
+					// We can reasonably assume that the blocker is friendly and has a similar locomotor type.
+					// If there is a free cell next to the blocker that is a similar or closer distance to the
+					// destination then we can probably nudge or path around it.
+					var blockerDistSq = (nextCell - destination.Value).LengthSquared;
+					var nudgeOrRepath = CVec.Directions
+						.Select(d => nextCell + d)
+						.Any(c => c != self.Location && (c - destination.Value).LengthSquared <= blockerDistSq && mobile.CanEnterCell(c, ignoreActor));
+
+					if (adjacentToDestination || !nudgeOrRepath)
+					{
+						path.Clear();
+						return null;
+					}
 				}
 
 				// There is no point in waiting for the other actor to move if it is incapable of moving.
