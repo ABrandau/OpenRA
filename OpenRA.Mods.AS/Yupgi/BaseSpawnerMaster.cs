@@ -84,7 +84,7 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 		public override object Create(ActorInitializer init) { return new BaseSpawnerMaster(init, this); }
 	}
 
-	public class BaseSpawnerMaster : ConditionalTrait<BaseSpawnerMasterInfo>, INotifyCreated, INotifyKilled, INotifyOwnerChanged
+	public class BaseSpawnerMaster : ConditionalTrait<BaseSpawnerMasterInfo>, INotifyCreated, INotifyKilled, INotifyActorDisposing, INotifyOwnerChanged
 	{
 		readonly Actor self;
 		protected readonly BaseSpawnerSlaveEntry[] SlaveEntries;
