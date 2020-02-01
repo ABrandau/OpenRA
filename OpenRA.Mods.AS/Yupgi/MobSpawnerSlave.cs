@@ -1,14 +1,10 @@
 ﻿#region Copyright & License Information
 /*
- * Written by Boolbada of OP Mod.
- * Follows GPLv3 License as the OpenRA engine:
- *
- * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
- * This file is part of OpenRA, which is free software. It is made
- * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version. For more
- * information, see COPYING.
+ * Copyright 2015- OpenRA.Mods.AS Developers (see AUTHORS)
+ * This file is a part of a third-party plugin for OpenRA, which is
+ * free software. It is made available to you under the terms of the
+ * GNU General Public License as published by the Free Software
+ * Foundation. For more information, see COPYING.
  */
 #endregion
 
@@ -40,8 +36,10 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 
 		MobSpawnerMaster spawnerMaster;
 
-		// TODO: add more activities for aircrafts
-		public bool IsMoving { get { return self.CurrentActivity is Move; } }
+		public bool IsMoving()
+		{
+			return Moves.Any(m => m.IsTraitEnabled() && (m.CurrentMovementTypes.HasFlag(MovementType.Horizontal) || m.CurrentMovementTypes.HasFlag(MovementType.Vertical)));
+		}
 
 		public MobSpawnerSlave(ActorInitializer init, MobSpawnerSlaveInfo info)
 			: base(init, info)
@@ -50,7 +48,7 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 			//// this.info = info;
 		}
 
-		public override void Created(Actor self)
+		protected override void Created(Actor self)
 		{
 			base.Created(self);
 

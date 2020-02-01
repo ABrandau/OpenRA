@@ -1,17 +1,15 @@
 ﻿#region Copyright & License Information
 /*
- * Written by Boolbada of OP Mod.
- * Follows GPLv3 License as the OpenRA engine:
- * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
- * This file is part of OpenRA, which is free software. It is made
- * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version. For more
- * information, see COPYING.
+ * Copyright 2015- OpenRA.Mods.AS Developers (see AUTHORS)
+ * This file is a part of a third-party plugin for OpenRA, which is
+ * free software. It is made available to you under the terms of the
+ * GNU General Public License as published by the Free Software
+ * Foundation. For more information, see COPYING.
  */
 #endregion
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Primitives;
@@ -45,8 +43,8 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 		[Desc("Slave actors to contain upon creation. Set to -1 to start with full slaves.")]
 		public readonly int InitialActorCount = -1;
 
-		[Desc("The armament which will trigger the slaves to attack the target. (== \"Name:\" tag of Armament, not @tag!)")]
-		public readonly string SpawnerArmamentName = "primary";
+		[Desc("Name of the armaments that grant this condition.")]
+		public readonly HashSet<string> ArmamentNames = new HashSet<string>() { "primary" };
 
 		[Desc("What happens to the slaves when the master is killed?")]
 		public readonly SpawnerSlaveDisposal SlaveDisposalOnKill = SpawnerSlaveDisposal.KillSlaves;
@@ -62,10 +60,6 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 
 		[Desc("Spawn regen delay, in ticks")]
 		public readonly int RespawnTicks = 150;
-
-		// This can be computed but this should be faster.
-		[Desc("Air units and ground units have different mobile trait so...")]
-		public readonly bool SpawnIsGroundUnit = false;
 
 		public override void RulesetLoaded(Ruleset rules, ActorInfo ai)
 		{
@@ -84,7 +78,7 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 		public override object Create(ActorInitializer init) { return new BaseSpawnerMaster(init, this); }
 	}
 
-	public class BaseSpawnerMaster : ConditionalTrait<BaseSpawnerMasterInfo>, INotifyCreated, INotifyKilled, INotifyActorDisposing, INotifyOwnerChanged
+	public class BaseSpawnerMaster : ConditionalTrait<BaseSpawnerMasterInfo>, INotifyKilled, INotifyOwnerChanged, INotifyActorDisposing
 	{
 		readonly Actor self;
 		protected readonly BaseSpawnerSlaveEntry[] SlaveEntries;
@@ -92,6 +86,8 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 		IFacing facing;
 		ExitInfo[] exits;
 		RallyPoint rallyPoint;
+
+		protected IReloadModifier[] reloadModifiers;
 
 		public BaseSpawnerMaster(ActorInitializer init, BaseSpawnerMasterInfo info)
 			: base(info)
@@ -126,17 +122,13 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 			exits = self.Info.TraitInfos<ExitInfo>().ToArray();
 			rallyPoint = self.TraitOrDefault<RallyPoint>();
 
-			// Spawn initial load.
-			int burst = Info.InitialActorCount == -1 ? Info.Actors.Length : Info.InitialActorCount;
-			for (int i = 0; i < burst; i++)
-				Replenish(self, SlaveEntries);
+			reloadModifiers = self.TraitsImplementing<IReloadModifier>().ToArray();
 		}
 
 		/// <summary>
 		/// Replenish destoyed slaves or create new ones from nothing.
 		/// Follows policy defined by Info.OneShotSpawn.
 		/// </summary>
-		/// <returns>true when a new slave actor is created.</returns>
 		public void Replenish(Actor self, BaseSpawnerSlaveEntry[] slaveEntries)
 		{
 			if (Info.SpawnAllAtOnce)
@@ -160,8 +152,7 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 		/// <summary>
 		/// Replenish one slave entry.
 		/// </summary>
-		/// <returns>true when a new slave actor is created.</returns>
-		public void Replenish(Actor self, BaseSpawnerSlaveEntry entry)
+		public virtual void Replenish(Actor self, BaseSpawnerSlaveEntry entry)
 		{
 			if (entry.IsValid)
 				throw new InvalidOperationException("Replenish must not be run on a valid entry!");
@@ -195,36 +186,27 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 			return candidates.Random(self.World.SharedRandom);
 		}
 
-		public virtual void Killed(Actor self, AttackInfo e)
-		{
-			// Notify slaves.
-			foreach (var se in SlaveEntries)
-				if (se.IsValid)
-					se.SpawnerSlave.OnMasterKilled(se.Actor, e.Attacker, Info.SlaveDisposalOnKill);
-		}
-
 		public virtual void OnOwnerChanged(Actor self, Player oldOwner, Player newOwner)
 		{
-			// Owner thing is so difficult and confusing, I'm expecting bugs.
 			self.World.AddFrameEndTask(w =>
 			{
-				foreach (var se in SlaveEntries)
-					if (se.IsValid)
-						se.SpawnerSlave.OnMasterOwnerChanged(self, oldOwner, newOwner, Info.SlaveDisposalOnOwnerChange);
+				foreach (var slaveEntry in SlaveEntries)
+					if (slaveEntry.IsValid)
+						slaveEntry.SpawnerSlave.OnMasterOwnerChanged(slaveEntry.Actor, oldOwner, newOwner, Info.SlaveDisposalOnOwnerChange);
 			});
 		}
 
-		public virtual void Disposing(Actor self)
+		void INotifyActorDisposing.Disposing(Actor self)
 		{
 			// Just dispose them regardless of slave disposal options.
-			foreach (var se in SlaveEntries)
-				if (se.IsValid)
-					se.Actor.Dispose();
+			foreach (var slaveEntry in SlaveEntries)
+				if (slaveEntry.IsValid)
+					slaveEntry.Actor.Dispose();
 		}
 
-		public void SpawnIntoWorld(Actor self, Actor slave, WPos centerPosition)
+		public virtual void SpawnIntoWorld(Actor self, Actor slave, WPos centerPosition)
 		{
-			var exit = ChooseExit(self);
+			var exit = self.RandomExitOrDefault(self.World, null);
 			SetSpawnedFacing(slave, self, exit);
 
 			self.World.AddFrameEndTask(w =>
@@ -232,7 +214,7 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 				if (self.IsDead)
 					return;
 
-				var spawnOffset = exit == null ? WVec.Zero : exit.SpawnOffset;
+				var spawnOffset = exit == null ? WVec.Zero : exit.Info.SpawnOffset;
 				slave.Trait<IPositionable>().SetVisualPosition(slave, centerPosition + spawnOffset);
 
 				var location = self.World.Map.CellContaining(centerPosition + spawnOffset);
@@ -240,38 +222,17 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 				var mv = slave.Trait<IMove>();
 				slave.QueueActivity(mv.ReturnToCell(slave));
 
-				// Move to rally point if any.
-				if (rallyPoint != null)
-					foreach (var cell in rallyPoint.Path)
-						slave.QueueActivity(mv.MoveTo(cell, 2));
-				else
-				{
-					// Move to a valid position, if no rally point.
-					slave.QueueActivity(mv.MoveTo(location, 2));
-				}
+				slave.QueueActivity(mv.MoveTo(location, 2));
 
 				w.Add(slave);
 			});
 		}
 
-		// Production.cs use random to select an exit.
-		// Here, we choose one by round robin.
-		// Start from -1 so that +1 logic below will make it 0.
-		int exitRoundRobin = -1;
-		ExitInfo ChooseExit(Actor self)
-		{
-			if (exits.Length == 0)
-				return null;
-
-			exitRoundRobin = (exitRoundRobin + 1) % exits.Length;
-			return exits[exitRoundRobin];
-		}
-
-		void SetSpawnedFacing(Actor spawned, Actor spawner, ExitInfo exit)
+		void SetSpawnedFacing(Actor spawned, Actor spawner, Exit exit)
 		{
 			int facingOffset = facing == null ? 0 : facing.Facing;
 
-			var exitFacing = exit != null ? exit.Facing : 0;
+			var exitFacing = exit != null ? exit.Info.Facing : 0;
 
 			var spawnFacing = spawned.TraitOrDefault<IFacing>();
 			if (spawnFacing != null)
@@ -283,15 +244,28 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 
 		public void StopSlaves()
 		{
-			foreach (var se in SlaveEntries)
+			foreach (var slaveEntry in SlaveEntries)
 			{
-				if (!se.IsValid)
+				if (!slaveEntry.IsValid)
 					continue;
 
-				se.SpawnerSlave.Stop(se.Actor);
+				slaveEntry.SpawnerSlave.Stop(slaveEntry.Actor);
 			}
 		}
 
 		public virtual void OnSlaveKilled(Actor self, Actor slave) { }
+
+		void INotifyKilled.Killed(Actor self, AttackInfo e)
+		{
+			Killed(self, e);
+		}
+
+		protected virtual void Killed(Actor self, AttackInfo e)
+		{
+			// Notify slaves.
+			foreach (var slaveEntry in SlaveEntries)
+				if (slaveEntry.IsValid)
+					slaveEntry.SpawnerSlave.OnMasterKilled(slaveEntry.Actor, e.Attacker, Info.SlaveDisposalOnKill);
+		}
 	}
 }

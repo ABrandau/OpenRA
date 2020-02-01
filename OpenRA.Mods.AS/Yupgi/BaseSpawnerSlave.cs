@@ -1,24 +1,17 @@
 ﻿#region Copyright & License Information
 /*
- * Modded by Boolbada of OP Mod.
- * Modded from cargo.cs but a lot changed.
- * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
- * This file is part of OpenRA, which is free software. It is made
- * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version. For more
- * information, see COPYING.
+ * Copyright 2015- OpenRA.Mods.AS Developers (see AUTHORS)
+ * This file is a part of a third-party plugin for OpenRA, which is
+ * free software. It is made available to you under the terms of the
+ * GNU General Public License as published by the Free Software
+ * Foundation. For more information, see COPYING.
  */
 #endregion
 
 using System.Linq;
 using OpenRA.Mods.Common.Traits;
+using OpenRA.Primitives;
 using OpenRA.Traits;
-
-/*
-Works without base engine modification.
-Will work even better if the PR is merged
-*/
 
 namespace OpenRA.Mods.Yupgi_alert.Traits
 {
@@ -31,6 +24,9 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 
 		[Desc("Can these actors be mind controlled or captured?")]
 		public readonly bool AllowOwnerChange = false;
+
+		[Desc("Types of damage this actor explodes with due to an unallowed slave action. Leave empty for no damage types.")]
+		public readonly BitSet<DamageType> DamageTypes = default(BitSet<DamageType>);
 
 		public virtual object Create(ActorInitializer init) { return new BaseSpawnerSlave(init, this); }
 	}
@@ -49,18 +45,26 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 
 		public Actor Master { get; private set; }
 
+		// Make this actor attack a target.
+		Target lastTarget;
+
 		public BaseSpawnerSlave(ActorInitializer init, BaseSpawnerSlaveInfo info)
 		{
 			this.info = info;
 		}
 
-		public virtual void Created(Actor self)
+		void INotifyCreated.Created(Actor self)
+		{
+			Created(self);
+		}
+
+		protected virtual void Created(Actor self)
 		{
 			attackBases = self.TraitsImplementing<AttackBase>().ToArray();
 			conditionManager = self.Trait<ConditionManager>();
 		}
 
-		public void Killed(Actor self, AttackInfo e)
+		void INotifyKilled.Killed(Actor self, AttackInfo e)
 		{
 			if (Master == null || Master.IsDead)
 				return;
@@ -89,22 +93,15 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 		}
 
 		// Stop what self was doing.
-		public void Stop(Actor self)
+		public virtual void Stop(Actor self)
 		{
 			// Drop the target so that Attack() feels the need to assign target for this slave.
 			lastTarget = Target.Invalid;
 
 			self.CancelActivity();
-
-			// And tell attack bases to stop attacking.
-			foreach (var ab in attackBases)
-				if (!ab.IsTraitDisabled)
-					ab.OnStopOrder(self);
 		}
 
-		// Make this actor attack a target.
-		Target lastTarget;
-		public void Attack(Actor self, Target target)
+		public virtual void Attack(Actor self, Target target)
 		{
 			// Don't have to change target or alter current activity.
 			if (!TargetSwitched(lastTarget, target))
@@ -123,24 +120,8 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 				if (ab.IsTraitDisabled)
 					continue;
 
-				if (target.Actor == null)
-					ab.AttackTarget(target, false, true, true); // force fire on the ground.
-				else if (target.Actor.Owner.Stances[self.Owner] == Stance.Ally)
-					ab.AttackTarget(target, false, true, true); // force fire on ally.
-				else if (target.Actor.Owner.Stances[self.Owner] == Stance.Neutral)
-					ab.AttackTarget(target, false, true, true); // force fire on neutral.
-				else
-					/* Target deprives me of force fire information.
-					 * This is a glitch if force fire weapon and normal fire are different, as in
-					 * RA mod spies but won't matter too much for carriers. */
-					ab.AttackTarget(target, false, true, target.RequiresForceFire);
+				ab.AttackTarget(target, false, true, true);
 			}
-		}
-
-		// DUMMY FUNCTION to suppress masterDeadToken assigned but unused warning (== error for Travis).
-		void OnNewMaster(Actor self, Actor master)
-		{
-			conditionManager.RevokeCondition(self, masterDeadToken);
 		}
 
 		public virtual void OnMasterKilled(Actor self, Actor attacker, SpawnerSlaveDisposal disposal)
@@ -152,7 +133,7 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 			switch (disposal)
 			{
 				case SpawnerSlaveDisposal.KillSlaves:
-					self.Kill(attacker);
+					self.Kill(attacker, info.DamageTypes);
 					break;
 				case SpawnerSlaveDisposal.GiveSlavesToAttacker:
 					self.CancelActivity();
@@ -171,7 +152,7 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 			switch (disposal)
 			{
 				case SpawnerSlaveDisposal.KillSlaves:
-					self.Kill(self);
+					self.Kill(self, info.DamageTypes);
 					break;
 				case SpawnerSlaveDisposal.GiveSlavesToAttacker:
 					self.CancelActivity();
@@ -186,7 +167,7 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 
 		// What if the slave gets mind controlled?
 		// Slaves aren't good without master so, kill it.
-		public virtual void OnOwnerChanged(Actor self, Player oldOwner, Player newOwner)
+		void INotifyOwnerChanged.OnOwnerChanged(Actor self, Player oldOwner, Player newOwner)
 		{
 			// In this case, the slave will be disposed, one way or other.
 			if (Master == null || !Master.IsDead)
@@ -202,7 +183,7 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 			if (info.AllowOwnerChange)
 				return;
 
-			self.Kill(self);
+			self.Kill(self, info.DamageTypes);
 		}
 	}
 }

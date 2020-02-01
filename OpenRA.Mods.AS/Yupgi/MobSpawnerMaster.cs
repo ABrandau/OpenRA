@@ -1,18 +1,15 @@
 ﻿#region Copyright & License Information
 /*
- * Written by Boolbada of OP Mod.
- * Follows OpenRA's license, GPLv3 as follows:
- *
- * Copyright 2007-2017 The OpenRA Developers (see AUTHORS)
- * This file is part of OpenRA, which is free software. It is made
- * available to you under the terms of the GNU General Public License
- * as published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version. For more
- * information, see COPYING.
+ * Copyright 2015- OpenRA.Mods.AS Developers (see AUTHORS)
+ * This file is a part of a third-party plugin for OpenRA, which is
+ * free software. It is made available to you under the terms of the
+ * GNU General Public License as published by the Free Software
+ * Foundation. For more information, see COPYING.
  */
 #endregion
 
 using System.Linq;
+using OpenRA.Mods.Common;
 using OpenRA.Mods.Common.Activities;
 using OpenRA.Mods.Common.Traits;
 using OpenRA.Traits;
@@ -74,8 +71,8 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 		public override object Create(ActorInitializer init) { return new MobSpawnerMaster(init, this); }
 	}
 
-	public class MobSpawnerMaster : BaseSpawnerMaster, INotifyCreated, INotifyOwnerChanged, ITick,
-		INotifyActorDisposing, IResolveOrder, INotifyAttack
+	public class MobSpawnerMaster : BaseSpawnerMaster, INotifyOwnerChanged, ITick,
+		IResolveOrder, INotifyAttack
 	{
 		class MobSpawnerSlaveEntry : BaseSpawnerSlaveEntry
 		{
@@ -94,7 +91,8 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 		Aircraft aircraft;
 		Health health;
 
-		public MobSpawnerMaster(ActorInitializer init, MobSpawnerMasterInfo info) : base(init, info)
+		public MobSpawnerMaster(ActorInitializer init, MobSpawnerMasterInfo info)
+			: base(init, info)
 		{
 			Info = info;
 		}
@@ -105,7 +103,12 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 			health = self.Trait<Health>();
 			aircraft = self.TraitOrDefault<Aircraft>();
 
-			base.Created(self); // Base class does the initial spawning
+			base.Created(self);
+
+			// Spawn initial load.
+			int burst = Info.InitialActorCount == -1 ? Info.Actors.Length : Info.InitialActorCount;
+			for (int i = 0; i < burst; i++)
+				Replenish(self, SlaveEntries);
 
 			// The base class creates the slaves but doesn't move them into world.
 			// Let's do it here.
@@ -158,7 +161,7 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 			AssignTargetsToSlaves(self, target);
 		}
 
-		public void Tick(Actor self)
+		void ITick.Tick(Actor self)
 		{
 			if (spawnReplaceTicks > 0)
 			{
@@ -173,7 +176,7 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 
 					// If there's something left to spawn, restart the timer.
 					if (SelectEntryToSpawn(slaveEntries) != null)
-						spawnReplaceTicks = Info.RespawnTicks;
+						spawnReplaceTicks = Util.ApplyPercentageModifiers(Info.RespawnTicks, reloadModifiers.Select(rm => rm.GetReloadModifier()));
 				}
 			}
 
@@ -251,7 +254,7 @@ namespace OpenRA.Mods.Yupgi_alert.Traits
 				if (se.Actor.Location == location)
 					continue;
 
-				if (!se.SpawnerSlave.IsMoving)
+				if (!se.SpawnerSlave.IsMoving())
 				{
 					se.SpawnerSlave.Stop(se.Actor);
 					se.SpawnerSlave.Move(se.Actor, location);
