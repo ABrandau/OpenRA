@@ -12,82 +12,270 @@
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Graphics;
+using OpenRA.Mods.Common.Graphics;
 using OpenRA.Mods.Common.Traits;
+using OpenRA.Primitives;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Orders
 {
-	public class RepairOrderGenerator : IOrderGenerator
+	public class RepairOrderGenerator : GlobalButtonOrderGenerator
 	{
-		public IEnumerable<Order> Order(World world, CPos cell, int2 worldPixel, MouseInput mi)
+		int2 dragStartMousePos;
+		int2 dragEndMousePos;
+		bool isDragging;
+
+		public override IEnumerable<Order> Order(World world, CPos cell, int2 worldPixel, MouseInput mi)
+		{
+			if ((mi.Button == MouseButton.Left && mi.Event == MouseInputEvent.Down) || (mi.Button == MouseButton.Right && mi.Event == MouseInputEvent.Up) || (mi.Button == MouseButton.Left && mi.Event == MouseInputEvent.Up) || (mi.Button == MouseButton.Left && mi.Event == MouseInputEvent.Move))
+				return OrderInner(world, cell, worldPixel, mi);
+
+			return Enumerable.Empty<Order>();
+		}
+
+		protected override IEnumerable<Order> OrderInner(World world, CPos cell, int2 worldPixel, MouseInput mi)
 		{
 			if (mi.Button == MouseButton.Right)
 				world.CancelInputMode();
 
-			return OrderInner(world, mi);
+			return OrderInner(world, mi, worldPixel);
 		}
 
-		static IEnumerable<Order> OrderInner(World world, MouseInput mi)
+		protected IEnumerable<Order> OrderInner(World world, MouseInput mi, int2 worldPixel)
 		{
 			if (mi.Button != MouseButton.Left)
 				yield break;
 
-			var underCursor = world.ScreenMap.ActorsAtMouse(mi)
-				.Select(a => a.Actor)
-				.FirstOrDefault(a => a.AppearsFriendlyTo(world.LocalPlayer.PlayerActor) && !world.FogObscures(a));
+			dragEndMousePos = worldPixel;
 
-			if (underCursor == null)
+			if (mi.Event == MouseInputEvent.Down)
+			{
+				if (!isDragging)
+				{
+					isDragging = true;
+					dragStartMousePos = worldPixel;
+				}
+
+				yield break;
+			}
+
+			if (mi.Event == MouseInputEvent.Move)
 				yield break;
 
-			if (underCursor.GetDamageState() == DamageState.Undamaged)
-				yield break;
+			// Use "isDragging" here to avoid mis-dragging when player use hot key to switch mode.
+			if (isDragging && mi.Event == MouseInputEvent.Up)
+			{
+				var actors = SelectRepairableActorsInBoxWithDeadzone(world, dragStartMousePos, dragEndMousePos, mi.Modifiers);
+				isDragging = false;
 
+				if (!actors.Any())
+					yield break;
+
+				foreach (var actor in actors)
+					yield return RepairUnderCondition(actor, world, mi);
+			}
+		}
+
+		protected Order RepairUnderCondition(Actor actor, World world, MouseInput mi)
+		{
 			// Repair a building.
-			if (underCursor.Info.HasTraitInfo<RepairableBuildingInfo>())
-				yield return new Order("RepairBuilding", world.LocalPlayer.PlayerActor, Target.FromActor(underCursor), false);
-
-			// Don't command allied units
-			if (underCursor.Owner != world.LocalPlayer)
-				yield break;
+			if (actor.Info.HasTraitInfo<RepairableBuildingInfo>())
+				return new Order("RepairBuilding", world.LocalPlayer.PlayerActor, Target.FromActor(actor), false);
 
 			Actor repairBuilding = null;
 			var orderId = "Repair";
 
-			// Test for generic Repairable (used on units).
-			var repairable = underCursor.TraitOrDefault<Repairable>();
+			// Repair units.
+			var repairable = actor.TraitOrDefault<Repairable>();
 			if (repairable != null)
-				repairBuilding = repairable.FindRepairBuilding(underCursor);
+				repairBuilding = repairable.FindRepairBuilding(actor);
 			else
 			{
-				var repairableNear = underCursor.TraitOrDefault<RepairableNear>();
+				var repairableNear = actor.TraitOrDefault<RepairableNear>();
 				if (repairableNear != null)
 				{
 					orderId = "RepairNear";
-					repairBuilding = repairableNear.FindRepairBuilding(underCursor);
+					repairBuilding = repairableNear.FindRepairBuilding(actor);
 				}
 			}
 
-			if (repairBuilding == null)
-				yield break;
-
-			yield return new Order(orderId, underCursor, Target.FromActor(repairBuilding), false) { VisualFeedbackTarget = Target.FromActor(underCursor) };
+			return new Order(orderId, actor, Target.FromActor(repairBuilding), mi.Modifiers.HasModifier(Modifiers.Shift))
+			{
+				VisualFeedbackTarget = Target.FromActor(actor)
+			};
 		}
 
-		public void Tick(World world)
+		protected override IEnumerable<IRenderable> RenderAnnotations(WorldRenderer wr, World world)
 		{
-			if (world.LocalPlayer != null &&
-				world.LocalPlayer.WinState != WinState.Undefined)
-				world.CancelInputMode();
+			var lastMousePos = wr.Viewport.ViewToWorldPx(Viewport.LastMousePos);
+			if (isDragging && (lastMousePos - dragStartMousePos).Length > Game.Settings.Game.SelectionDeadzone)
+			{
+				var diag1 = wr.ProjectedPosition(lastMousePos);
+				var diag2 = wr.ProjectedPosition(dragStartMousePos);
+				var modifiers = Game.GetModifierKeys();
+
+				// Draw the rectangle box dragged by mouse.
+				yield return new RectangleAnnotationRenderable(diag1, diag2, diag1, 1, Color.FromArgb(0xff009a00));
+
+				/* Following codes do two things:
+				// 1. Draw health bar for every repairable units/buildings that can be repaired inside the box under modifier.
+				// 2. Draw highlight box for each unit/building that can be repaired inside the box under modifier.
+				*/
+				var actors = SelectRepairableActorsInBoxWithDeadzone(world, dragStartMousePos, lastMousePos, modifiers, true);
+				foreach (var actor in actors)
+				{
+					var decorationBounds = actor.TraitsImplementing<IDecorationBounds>().ToArray();
+					var bounds = decorationBounds.FirstNonEmptyBounds(actor, wr);
+					yield return new SelectionBarsRenderable(actor, bounds, true, false);
+					yield return new GlobalButtonOrderSelectionBoxAnnotationRenderable(actor, bounds, Color.FromArgb(0xff00ea00));
+				}
+			}
+
+			yield break;
 		}
 
-		public IEnumerable<IRenderable> Render(WorldRenderer wr, World world) { yield break; }
-		public IEnumerable<IRenderable> RenderAboveShroud(WorldRenderer wr, World world) { yield break; }
-
-		public string GetCursor(World world, CPos cell, int2 worldPixel, MouseInput mi)
+		protected bool CheckRepairable(Actor actor, World world)
 		{
-			mi.Button = MouseButton.Left;
-			return OrderInner(world, mi).Any()
-				? "repair" : "repair-blocked";
+			if (actor.GetDamageState() == DamageState.Undamaged)
+				return false;
+
+			// 1. Test for buildings repairable.
+			if (actor.Info.HasTraitInfo<RepairableBuildingInfo>())
+				return true;
+
+			// 2. Test for generic repairable (used on units).
+			// Player can only repair their own units. Unlike buildings.
+			if (actor.Owner != world.LocalPlayer)
+				return false;
+
+			Actor repairBuilding = null;
+
+			var repairable = actor.TraitOrDefault<Repairable>();
+			if (repairable != null)
+				repairBuilding = repairable.FindRepairBuilding(actor);
+			else
+			{
+				var repairableNear = actor.TraitOrDefault<RepairableNear>();
+				if (repairableNear != null)
+				{
+					repairBuilding = repairableNear.FindRepairBuilding(actor);
+				}
+			}
+
+			if (repairBuilding != null)
+				return true;
+
+			return false;
+		}
+
+		protected IEnumerable<Actor> SelectRepairableActorsInBoxWithDeadzone(World world, int2 a, int2 b, Modifiers modifiers, bool forRendering = false)
+		{
+			// Because the "WorldInteractionControllerWidget" can show detailed unit's information when mouse over,
+			// so we can just leave it alone when render under cursor actor. No needs to rend it twice.
+			var isDeadzone = true;
+			if ((a - b).Length <= Game.Settings.Game.SelectionDeadzone)
+			{
+				if (forRendering)
+					return Enumerable.Empty<Actor>();
+				else
+					isDeadzone = false;
+			}
+
+			IEnumerable<Actor> allActors;
+
+			// When "isDeadzone == false", only choose one or no actor.
+			if (isDeadzone)
+			{
+				// "x.AppearsFriendlyTo(world.LocalPlayer.PlayerActor)" only select local player and allied units.
+				// "x.Owner == world.LocalPlayer" only select local player units which are from local player and allied
+				// when used with the line above.
+				allActors = world.ScreenMap.ActorsInMouseBox(a, b)
+				.Select(x => x.Actor)
+				.Where(x => x.AppearsFriendlyTo(world.LocalPlayer.PlayerActor) && !world.FogObscures(x)
+					&& CheckRepairable(x, world));
+
+				if (!allActors.Any())
+					return allActors;
+
+				/* Smart Selection Of Buildings: at first, check repairing-status of things inside,
+				// then either select those who not active or select all whose repairing-status are actived.
+				*/
+
+				// Smart select building part
+				if (modifiers != Modifiers.Alt&&!allActors.All(x => !x.Info.HasTraitInfo<RepairableBuildingInfo>() || x.Trait<RepairableBuilding>().RepairActive))
+				{
+					allActors = allActors
+						.Select(x => x)
+						.Where(x => !x.Info.HasTraitInfo<RepairableBuildingInfo>() || !x.Trait<RepairableBuilding>().RepairActive);
+				}
+			}
+			else
+			{
+				allActors = world.ScreenMap.ActorsAtMouse(b)
+				.Select(x => x.Actor)
+				.Where(x => x.AppearsFriendlyTo(world.LocalPlayer.PlayerActor) && !world.FogObscures(x)
+					&& CheckRepairable(x, world));
+
+				return allActors;
+			}
+			
+
+			if (forRendering)
+			{
+				allActors = allActors
+							.Select(x => x)
+							.Where(x => x.TraitOrDefault<ISelectionDecorations>() != null);
+			}
+
+			/* Repair Selection:
+			// Default: buildings
+			// Ctrl: all
+			// Alt: vehicles and aircrafts
+			*/
+			if (modifiers == Modifiers.Ctrl)
+			{
+				return allActors;
+			}
+			else if (modifiers == Modifiers.Alt)
+			{
+				var repairableUnits = allActors
+						.Select(x => x)
+						.Where(x => !x.Info.HasTraitInfo<RepairableBuildingInfo>());
+				return repairableUnits;
+			}
+
+			// Default modifier:
+			else
+			{
+				var repairableBuildings = allActors
+						.Select(x => x)
+						.Where(x => x.Info.HasTraitInfo<RepairableBuildingInfo>() && x.Owner == world.LocalPlayer);
+
+				return repairableBuildings;
+			}
+		}
+
+		protected override string GetCursor(World world, CPos cell, int2 worldPixel, MouseInput mi)
+		{
+			return MouseOverActor(world, worldPixel) ? "repair" : "repair-blocked";
+		}
+
+		protected bool MouseOverActor(World world, int2 worldPixel)
+		{
+			// "x.Info.HasTraitInfo<SelectableInfo>()" avoids selecting some special actors like "camera" and "mutiplayer starting point".
+			var underCursor = world.ScreenMap.ActorsAtMouse(worldPixel)
+				.Select(x => x.Actor)
+				.Where(x => x.Info.HasTraitInfo<SelectableInfo>() && !world.FogObscures(x));
+
+			// ONLY when the mouse is over an enemy/unrepairable/non-allied-building and selectable actor, the cursor will change to "repair-blocked",
+			// which means cursor is "repair" when no normal actors under the mouse.
+			if (!underCursor.Any())
+				return true;
+			else
+			{
+				var actor = underCursor.First();
+				return actor.AppearsFriendlyTo(world.LocalPlayer.PlayerActor) && CheckRepairable(actor, world);
+			}
 		}
 	}
 }
