@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2020 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -95,11 +95,128 @@ namespace OpenRA.Mods.Common.Traits.BotModules.Squads
 				if (u.Owner == squad.Bot.Player && u.Info.HasTraitInfo<BuildingInfo>())
 					return false;
 
-			var enemyAroundUnit = units.Where(unit => squad.SquadManager.IsEnemyUnit(unit) && unit.Info.HasTraitInfo<AttackBaseInfo>());
+			var enemyAroundUnit = units.Where(unit => squad.SquadManager.IsPreferredEnemyUnit(unit) && unit.Info.HasTraitInfo<AttackBaseInfo>());
 			if (!enemyAroundUnit.Any())
 				return false;
 
 			return flee(enemyAroundUnit);
+		}
+
+		protected static bool IsRearming(Actor a)
+		{
+			if (a.IsIdle)
+				return false;
+
+			var activity = a.CurrentActivity;
+			if (activity.GetType() == typeof(Resupply))
+				return true;
+
+			var next = activity.NextActivity;
+			if (next == null)
+				return false;
+
+			if (next.GetType() == typeof(Resupply))
+				return true;
+
+			return false;
+		}
+
+		protected static bool FullAmmo(IEnumerable<AmmoPool> ammoPools)
+		{
+			foreach (var ap in ammoPools)
+				if (!ap.HasFullAmmo)
+					return false;
+
+			return true;
+		}
+
+		protected static bool HasAmmo(IEnumerable<AmmoPool> ammoPools)
+		{
+			foreach (var ap in ammoPools)
+				if (!ap.HasAmmo)
+					return false;
+
+			return true;
+		}
+
+		protected static bool ReloadsAutomatically(IEnumerable<AmmoPool> ammoPools, Rearmable rearmable)
+		{
+			if (rearmable == null)
+				return true;
+
+			foreach (var ap in ammoPools)
+				if (!rearmable.Info.AmmoPools.Contains(ap.Info.Name))
+					return false;
+
+			return true;
+		}
+
+		// Retreat units from combat, or for supply only in idle
+		protected void Retreat(Squad squad, bool flee, bool rearm, bool repair)
+		{
+			var loc = new CPos(0, 0, 0);
+
+			// HACK: "alreadyRepair" is to solve repairpad performance
+			// if repairpad logic is better we will only need
+			// this function for all flee states.
+			var alreadyRepair = false;
+
+			if (flee)
+				loc = RandomBuildingLocation(squad);
+
+			foreach (var a in squad.Units)
+			{
+				if (IsRearming(a))
+					continue;
+
+				var orderQueued = false;
+
+				// Try rearm units.
+				if (rearm)
+				{
+					var ammoPools = a.TraitsImplementing<AmmoPool>().ToArray();
+					if (!ReloadsAutomatically(ammoPools, a.TraitOrDefault<Rearmable>()) && !FullAmmo(ammoPools))
+					{
+						squad.Bot.QueueOrder(new Order("ReturnToBase", a, orderQueued));
+						orderQueued = true;
+					}
+				}
+
+				// Try repair units.
+				if (repair && !alreadyRepair)
+				{
+					Actor repairBuilding = null;
+					var orderId = "Repair";
+					var health = a.TraitOrDefault<IHealth>();
+
+					if (health != null && health.DamageState > DamageState.Undamaged)
+					{
+						var repairable = a.TraitOrDefault<Repairable>();
+						if (repairable != null)
+							repairBuilding = repairable.FindRepairBuilding(a);
+						else
+						{
+							var repairableNear = a.TraitOrDefault<RepairableNear>();
+							if (repairableNear != null)
+							{
+								orderId = "RepairNear";
+								repairBuilding = repairableNear.FindRepairBuilding(a);
+							}
+						}
+
+						if (repairBuilding != null)
+						{
+							squad.Bot.QueueOrder(new Order(orderId, a, Target.FromActor(repairBuilding), orderQueued));
+							orderQueued = true;
+							alreadyRepair = true;
+						}
+					}
+				}
+
+				// If there is no order in queue and units should flee, try flee.
+				if (flee && !orderQueued)
+					squad.Bot.QueueOrder(new Order("Move", a, Target.FromCell(squad.World, loc), false));
+			}
 		}
 	}
 }

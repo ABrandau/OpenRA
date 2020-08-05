@@ -10,6 +10,7 @@
 #endregion
 
 using System.Linq;
+using OpenRA.Mods.Common.Activities;
 using OpenRA.Traits;
 
 namespace OpenRA.Mods.Common.Traits.BotModules.Squads
@@ -71,10 +72,13 @@ namespace OpenRA.Mods.Common.Traits.BotModules.Squads
 			}
 
 			var enemyUnits = owner.World.FindActorsInCircle(owner.TargetActor.CenterPosition, WDist.FromCells(owner.SquadManager.Info.IdleScanRadius))
-				.Where(owner.SquadManager.IsEnemyUnit).ToList();
+				.Where(a => owner.SquadManager.IsPreferredEnemyUnit(a) && owner.SquadManager.IsNotHiddenUnit(a)).ToList();
 
 			if (enemyUnits.Count == 0)
+			{
+				Retreat(owner, false, true, true);
 				return;
+			}
 
 			if (AttackOrFleeFuzzy.Default.CanAttack(owner.Units, enemyUnits))
 			{
@@ -130,7 +134,7 @@ namespace OpenRA.Mods.Common.Traits.BotModules.Squads
 			else
 			{
 				var enemies = owner.World.FindActorsInCircle(leader.CenterPosition, WDist.FromCells(owner.SquadManager.Info.AttackScanRadius))
-					.Where(owner.SquadManager.IsEnemyUnit);
+					.Where(a => owner.SquadManager.IsPreferredEnemyUnit(a) && owner.SquadManager.IsNotHiddenUnit(a));
 				var target = enemies.ClosestTo(leader.CenterPosition);
 				if (target != null)
 				{
@@ -190,7 +194,7 @@ namespace OpenRA.Mods.Common.Traits.BotModules.Squads
 			if (!owner.IsValid)
 				return;
 
-			GoToRandomOwnBuilding(owner);
+			Retreat(owner, true, true, true);
 			owner.FuzzyStateMachine.ChangeState(owner, new NavyUnitsIdleState(), true);
 		}
 

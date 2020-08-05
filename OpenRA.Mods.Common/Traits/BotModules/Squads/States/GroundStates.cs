@@ -1,6 +1,6 @@
 #region Copyright & License Information
 /*
- * Copyright 2007-2019 The OpenRA Developers (see AUTHORS)
+ * Copyright 2007-2020 The OpenRA Developers (see AUTHORS)
  * This file is part of OpenRA, which is free software. It is made
  * available to you under the terms of the GNU General Public License
  * as published by the Free Software Foundation, either version 3 of
@@ -25,6 +25,25 @@ namespace OpenRA.Mods.Common.Traits.BotModules.Squads
 		{
 			return owner.SquadManager.FindClosestEnemy(owner.Units.First().CenterPosition);
 		}
+
+		protected Actor GetRandomValuableTarget(Squad owner)
+		{
+			var manager = owner.SquadManager;
+			var mustDestroyedEnemy = manager.World.ActorsHavingTrait<MustBeDestroyed>(t => t.Info.RequiredForShortGame)
+					.Where(a => manager.IsPreferredEnemyUnit(a) && manager.IsNotHiddenUnit(a)).ToArray();
+
+			if (!mustDestroyedEnemy.Any())
+				return FindClosestEnemy(owner);
+
+			return mustDestroyedEnemy.Random(owner.World.LocalRandom);
+		}
+
+		protected Actor ThreatScan(Squad owner, Actor teamLeader, WDist scanRadius)
+		{
+			var enemies = owner.World.FindActorsInCircle(teamLeader.CenterPosition, scanRadius)
+					.Where(a => owner.SquadManager.IsPreferredEnemyUnit(a) && owner.SquadManager.IsNotHiddenUnit(a));
+			return enemies.ClosestTo(teamLeader.CenterPosition);
+		}
 	}
 
 	class GroundUnitsIdleState : GroundStateBase, IState
@@ -46,17 +65,20 @@ namespace OpenRA.Mods.Common.Traits.BotModules.Squads
 			}
 
 			var enemyUnits = owner.World.FindActorsInCircle(owner.TargetActor.CenterPosition, WDist.FromCells(owner.SquadManager.Info.IdleScanRadius))
-				.Where(owner.SquadManager.IsEnemyUnit).ToList();
+				.Where(a => owner.SquadManager.IsPreferredEnemyUnit(a) && owner.SquadManager.IsNotHiddenUnit(a)).ToList();
 
 			if (enemyUnits.Count == 0)
+			{
+				Retreat(owner, false, true, true);
 				return;
+			}
 
 			if (AttackOrFleeFuzzy.Default.CanAttack(owner.Units, enemyUnits))
 			{
-				foreach (var u in owner.Units)
-					owner.Bot.QueueOrder(new Order("AttackMove", u, Target.FromCell(owner.World, owner.TargetActor.Location), false));
-
 				// We have gathered sufficient units. Attack the nearest enemy unit.
+				// Inform human allies about AI's rush attack.
+				owner.Bot.QueueOrder(new Order("PlaceBeacon", owner.SquadManager.Player.PlayerActor, Target.FromCell(owner.World, owner.TargetActor.Location), false)
+				{ SuppressVisualFeedback = true });
 				owner.FuzzyStateMachine.ChangeState(owner, new GroundUnitsAttackMoveState(), true);
 			}
 			else
@@ -68,18 +90,27 @@ namespace OpenRA.Mods.Common.Traits.BotModules.Squads
 
 	class GroundUnitsAttackMoveState : GroundStateBase, IState
 	{
+		public const int StuckInPathCheckTimes = 6;
+		public const int MakeWayTick = 2;
+
+		// Give tolerance for AI grouping team at start
+		internal int StuckInPath = StuckInPathCheckTimes * 3;
+		internal int TryMakeWay = MakeWayTick;
+		internal WPos LastPos = new WPos(0, 0, 0);
+
 		public void Activate(Squad owner) { }
 
 		public void Tick(Squad owner)
 		{
+			// Basic check
 			if (!owner.IsValid)
 				return;
 
 			if (!owner.IsTargetValid)
 			{
-				var closestEnemy = FindClosestEnemy(owner);
-				if (closestEnemy != null)
-					owner.TargetActor = closestEnemy;
+				var randomSuitableEnemy = GetRandomValuableTarget(owner);
+				if (randomSuitableEnemy != null)
+					owner.TargetActor = randomSuitableEnemy;
 				else
 				{
 					owner.FuzzyStateMachine.ChangeState(owner, new GroundUnitsFleeState(), true);
@@ -87,38 +118,87 @@ namespace OpenRA.Mods.Common.Traits.BotModules.Squads
 				}
 			}
 
-			var leader = owner.Units.ClosestTo(owner.TargetActor.CenterPosition);
-			if (leader == null)
+			// Initialize pathGuider. Optimaze pathfinding by using pathGuider.
+			var pathGuider = owner.Units.FirstOrDefault();
+			if (pathGuider == null)
 				return;
 
-			var ownUnits = owner.World.FindActorsInCircle(leader.CenterPosition, WDist.FromCells(owner.Units.Count) / 3)
-				.Where(a => a.Owner == owner.Units.First().Owner && owner.Units.Contains(a)).ToHashSet();
+			// 1. Threat scan surroundings
+			var attackScanRadius = WDist.FromCells(owner.SquadManager.Info.AttackScanRadius);
 
-			if (ownUnits.Count < owner.Units.Count)
+			var targetActor = ThreatScan(owner, pathGuider, attackScanRadius);
+			if (targetActor != null)
 			{
-				// Since units have different movement speeds, they get separated while approaching the target.
-				// Let them regroup into tighter formation.
-				owner.Bot.QueueOrder(new Order("Stop", leader, false));
-				foreach (var unit in owner.Units.Where(a => !ownUnits.Contains(a)))
-					owner.Bot.QueueOrder(new Order("AttackMove", unit, Target.FromCell(owner.World, leader.Location), false));
+				owner.TargetActor = targetActor;
+				owner.FuzzyStateMachine.ChangeState(owner, new GroundUnitsAttackState(), true);
+				return;
 			}
-			else
+
+			// 2. Force scattered for pathGuider if needed
+			if (StuckInPath <= 0)
 			{
-				var enemies = owner.World.FindActorsInCircle(leader.CenterPosition, WDist.FromCells(owner.SquadManager.Info.AttackScanRadius))
-					.Where(owner.SquadManager.IsEnemyUnit);
-				var target = enemies.ClosestTo(leader.CenterPosition);
-				if (target != null)
+				if (TryMakeWay > 0)
 				{
-					owner.TargetActor = target;
-					owner.FuzzyStateMachine.ChangeState(owner, new GroundUnitsAttackState(), true);
+					owner.Bot.QueueOrder(new Order("AttackMove", pathGuider, Target.FromCell(owner.World, owner.TargetActor.Location), false));
+
+					foreach (var a in owner.Units)
+					{
+						if (a != pathGuider)
+							owner.Bot.QueueOrder(new Order("Scatter", a, false));
+					}
+
+					TryMakeWay--;
 				}
 				else
-					foreach (var a in owner.Units)
-						owner.Bot.QueueOrder(new Order("AttackMove", a, Target.FromCell(owner.World, owner.TargetActor.Location), false));
+				{
+					// When going through is over, restore the check
+					StuckInPath = StuckInPathCheckTimes + MakeWayTick;
+					TryMakeWay = MakeWayTick;
+				}
+
+				return;
 			}
 
-			if (ShouldFlee(owner))
-				owner.FuzzyStateMachine.ChangeState(owner, new GroundUnitsFleeState(), true);
+			// 3. Check if the squad is stucked due to the map has very twisted path
+			// or currently bridge and tunnel from TS mod
+			if ((pathGuider.CenterPosition - LastPos).LengthSquared <= 4)
+				StuckInPath--;
+			else
+				StuckInPath = StuckInPathCheckTimes;
+
+			LastPos = pathGuider.CenterPosition;
+
+			// 4. Since units have different movement speeds, they get separated while approaching the target.
+
+			/* Let them regroup into tighter formation towards "pathGuider".
+			 *
+			 * "unitsArea" means the space the squad units will occupy (if 1 per Cell).
+			 * pathGuider only stop when scope of "unitsAround" is not covered all units;
+			 * units in "unitsHurryUp"  will catch up,
+			 * which keep the team tight while not stucked.
+			 *
+			 * Imagining "unitsArea" takes up a a place shape like square, we need to draw a circle
+			 * to cover the the enitire circle.
+			 *
+			 * When look around, pathGuider find units around to decide if it need to continue.
+			 * and units that need hurry up will try catch up before guider waiting
+			 *
+			 * However in practice because of the poor PF, squad tend to PF to a eclipse.
+			 * "lookAround" now has the radius of two times of the circle mentioned before.
+			 */
+
+			var groupArea = (long)WDist.FromCells(owner.Units.Count).Length * 1024;
+
+			var unitsHurryUp = owner.Units.Where(a => (a.CenterPosition - pathGuider.CenterPosition).LengthSquared >= groupArea * 2).ToArray();
+			var lookAround = owner.Units.Where(a => (a.CenterPosition - pathGuider.CenterPosition).LengthSquared <= groupArea * 5).ToArray();
+
+			if (owner.Units.Count > lookAround.Length)
+				owner.Bot.QueueOrder(new Order("Stop", pathGuider, false));
+			else
+				owner.Bot.QueueOrder(new Order("AttackMove", pathGuider, Target.FromCell(owner.World, owner.TargetActor.Location), false));
+
+			foreach (var unit in unitsHurryUp)
+				owner.Bot.QueueOrder(new Order("AttackMove", unit, Target.FromCell(owner.World, pathGuider.Location), false));
 		}
 
 		public void Deactivate(Squad owner) { }
@@ -130,26 +210,50 @@ namespace OpenRA.Mods.Common.Traits.BotModules.Squads
 
 		public void Tick(Squad owner)
 		{
+			var cannotRetaliate = false;
+
+			// Basic check
 			if (!owner.IsValid)
 				return;
 
-			if (!owner.IsTargetValid)
+			var teamLeader = owner.Units.FirstOrDefault();
+			if (teamLeader == null)
+				return;
+
+			// Rescan target to prevent being ambushed and die without fight
+			// If there is no threat around, return to AttackMove state for formation
+			var attackScanRadius = WDist.FromCells(owner.SquadManager.Info.AttackScanRadius);
+			var targetActor = ThreatScan(owner, teamLeader, attackScanRadius);
+
+			if (targetActor == null)
 			{
-				var closestEnemy = FindClosestEnemy(owner);
-				if (closestEnemy != null)
-					owner.TargetActor = closestEnemy;
-				else
+				owner.TargetActor = GetRandomValuableTarget(owner);
+				owner.FuzzyStateMachine.ChangeState(owner, new GroundUnitsAttackMoveState(), true);
+				return;
+			}
+			else
+			{
+				cannotRetaliate = true;
+				owner.TargetActor = targetActor;
+
+				foreach (var a in owner.Units)
 				{
-					owner.FuzzyStateMachine.ChangeState(owner, new GroundUnitsFleeState(), true);
-					return;
+					if (!BusyAttack(a))
+					{
+						if (CanAttackTarget(a, targetActor))
+						{
+							owner.Bot.QueueOrder(new Order("Attack", a, Target.FromActor(owner.TargetActor), false));
+							cannotRetaliate = false;
+						}
+						else
+							owner.Bot.QueueOrder(new Order("AttackMove", a, Target.FromCell(owner.World, teamLeader.Location), false));
+					}
+					else
+						cannotRetaliate = false;
 				}
 			}
 
-			foreach (var a in owner.Units)
-				if (!BusyAttack(a))
-					owner.Bot.QueueOrder(new Order("Attack", a, Target.FromActor(owner.TargetActor), false));
-
-			if (ShouldFlee(owner))
+			if (ShouldFlee(owner) || cannotRetaliate)
 				owner.FuzzyStateMachine.ChangeState(owner, new GroundUnitsFleeState(), true);
 		}
 
@@ -165,7 +269,8 @@ namespace OpenRA.Mods.Common.Traits.BotModules.Squads
 			if (!owner.IsValid)
 				return;
 
-			GoToRandomOwnBuilding(owner);
+			Retreat(owner, true, true, true);
+
 			owner.FuzzyStateMachine.ChangeState(owner, new GroundUnitsIdleState(), true);
 		}
 
